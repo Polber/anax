@@ -3,10 +3,13 @@ package main
 
 import (
 	"flag"
-	"github.com/open-horizon/anax/cli/sdo"
-	"github.com/open-horizon/anax/version"
 	"os"
 	"strings"
+
+	"github.com/open-horizon/anax/cli/sdo"
+	"github.com/open-horizon/anax/version"
+
+	"runtime"
 
 	"github.com/open-horizon/anax/cli/agreement"
 	"github.com/open-horizon/anax/cli/agreementbot"
@@ -35,7 +38,6 @@ import (
 	"github.com/open-horizon/anax/i18n"
 	"gopkg.in/alecthomas/kingpin.v2"
 	"k8s.io/client-go/rest"
-	"runtime"
 )
 
 func main() {
@@ -324,6 +326,8 @@ Environment Variables:
 	exBusinessUpdatePolicyIdTok := exBusinessUpdatePolicyCmd.Flag("id-token", msgPrinter.Sprintf("The Horizon ID and password of the user.")).Short('n').PlaceHolder("ID:TOK").String()
 	exBusinessUpdatePolicyPolicy := exBusinessUpdatePolicyCmd.Arg("policy", msgPrinter.Sprintf("The name of the policy to be updated in the Horizon Exchange.")).Required().String()
 	exBusinessUpdatePolicyJsonFile := exBusinessUpdatePolicyCmd.Flag("json-file", msgPrinter.Sprintf("The path to the json file containing the updated deployment policy attribute to be changed in the Horizon Exchange. Specify -f- to read from stdin.")).Short('f').Required().String()
+
+	exLoginCmd := exchangeCmd.Command("login", msgPrinter.Sprintf("Set user credentials in the Horizon Exchange. Allows exchangge commands to be run without specifying -u flag or setting the HZN_EXCHANGE_USER_AUTH environment variable"))
 
 	exNodeCmd := exchangeCmd.Command("node", msgPrinter.Sprintf("List and manage nodes in the Horizon Exchange"))
 	exNodeAddPolicyCmd := exNodeCmd.Command("addpolicy", msgPrinter.Sprintf("Add or replace the node policy in the Horizon Exchange."))
