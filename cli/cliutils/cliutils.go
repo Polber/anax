@@ -3,20 +3,13 @@ package cliutils
 import (
 	"bufio"
 	"bytes"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	dockerclient "github.com/fsouza/go-dockerclient"
-	"github.com/open-horizon/anax/config"
-	"github.com/open-horizon/anax/cutil"
-	"github.com/open-horizon/anax/exchange"
-	"github.com/open-horizon/anax/i18n"
-	"github.com/open-horizon/rsapss-tool/sign"
-	"github.com/open-horizon/rsapss-tool/verify"
-	"golang.org/x/text/language"
 	"io"
 	"io/ioutil"
 	"net"
@@ -30,6 +23,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	dockerclient "github.com/fsouza/go-dockerclient"
+	"github.com/open-horizon/anax/config"
+	"github.com/open-horizon/anax/cutil"
+	"github.com/open-horizon/anax/exchange"
+	"github.com/open-horizon/anax/i18n"
+	"github.com/open-horizon/rsapss-tool/sign"
+	"github.com/open-horizon/rsapss-tool/verify"
+	"golang.org/x/text/language"
 )
 
 const (
@@ -535,6 +537,30 @@ func GetHorizonUrlBase() string {
 	} else {
 		return HZN_API
 	}
+}
+
+// GetHorizonContainerIndex returns expected horizon container index based on the HORIZON_URL port binding
+// e.g. if horizon container is running on 8081 port it's index would be 1 and expected container name is horizon1
+func GetHorizonContainerIndex() (int, error) {
+	// get message printer
+	msgPrinter := i18n.GetMessagePrinter()
+
+	horizonUrl, err := url.Parse(GetHorizonUrlBase())
+	if err != nil {
+		return -1, fmt.Errorf(msgPrinter.Sprintf("Error parsing HORIZON_URL: %v", err))
+	}
+	_, port, err := net.SplitHostPort(horizonUrl.Host)
+	if err != nil {
+		return -1, fmt.Errorf(msgPrinter.Sprintf("Error parsing host of the HORIZON_URL: %v", err))
+	}
+	portInt, err := strconv.Atoi(port)
+	if err != nil {
+		return -1, fmt.Errorf(msgPrinter.Sprintf("Error parsing port of the HORIZON_URL: %v", err))
+	}
+	if portInt < 8080 {
+		return -1, fmt.Errorf(msgPrinter.Sprintf("Unexpected port of the HORIZON_URL: %v", portInt))
+	}
+	return portInt - 8080, nil
 }
 
 // Returns the agbot native url. If HZN_AGBOT_API not set, use HORIZON_URL
@@ -1550,28 +1576,60 @@ func VerifySigningKeyInput(keyFile string, isPublic bool) string {
 
 // get default keys if needed and verify them.
 // this function is used by `hzn exhcange pattern/service publish
-func GetSigningKeys(privKeyFilePath, pubKeyFilePath string) (string, string) {
+func GetSigningKeys(privKeyFilePath, pubKeyFilePath string) (string, []byte, string) {
 
-	// if the -k is specified but -K is not specified, then do not get public key default.
-	// the public key will not be stored with the resource.
-	defaultPublicKey := true
-	if privKeyFilePath != "" && pubKeyFilePath == "" {
-		defaultPublicKey = false
+	var err error
+	
+	// if -K is not specified, then the public key will be generated from the private key.
+	publicKeyGiven := true
+	if pubKeyFilePath == "" {
+		publicKeyGiven = false
 	}
 
-	// get default private key
+	// Get default private key if -k not specified
+	var privKey *rsa.PrivateKey
 	privKeyFilePath_tmp := WithDefaultEnvVar(&privKeyFilePath, "HZN_PRIVATE_KEY_FILE")
 	privKeyFilePath = VerifySigningKeyInput(*privKeyFilePath_tmp, false)
-
-	if privKeyFilePath != "" {
-		verifyPrivateKeyFormat(privKeyFilePath)
+	if privKey, err = sign.ReadPrivateKey(privKeyFilePath); err != nil {
+		Fatal(CLI_INPUT_ERROR, i18n.GetMessagePrinter().Sprintf("provided private key is not valid; error: %v", err))
 	}
 
+	// Load in public key, if given
+	var pubKeyBytes []byte
+	publicKeyName := "default.public.key"
 	// get default public key
-	if defaultPublicKey {
+	if publicKeyGiven {
+		publicKeyName = filepath.Base(pubKeyFilePath)
 		pubKeyFilePath = GetAndVerifyPublicKey(pubKeyFilePath)
+		pubKeyBytes = ReadFile(pubKeyFilePath)
+	} else {
+		// calculate public key from private key
+		pubKeyBytes, err = x509.MarshalPKIXPublicKey(&privKey.PublicKey)
+		if err != nil {
+			Fatal(CLI_GENERAL_ERROR, i18n.GetMessagePrinter().Sprintf("%v. Public key could not be generated."))
+		}
+		// format public key
+		pubKeyBytes = FormatKeyByteSlice(pubKeyBytes, true)
 	}
-	return privKeyFilePath, pubKeyFilePath
+	return privKeyFilePath, pubKeyBytes, publicKeyName
+}
+
+// Formats private/public key byte slice to include newlines and header/footer in RSA format
+func FormatKeyByteSlice(key []byte, isPublic bool) []byte {
+	
+	// Format public key
+	keyByteString := base64.StdEncoding.EncodeToString(key)
+	for i := 64; i < len(keyByteString); i += 65 {
+		keyByteString = keyByteString[:i] + "\n" + keyByteString[i:]
+	}
+	if isPublic {
+		keyByteString = "-----BEGIN PUBLIC KEY-----\n" + keyByteString + "\n-----END PUBLIC KEY-----\n"
+	} else {
+		keyByteString = "-----BEGIN RSA PRIVATE KEY-----\n" + keyByteString + "\n-----END RSA PRIVATE KEY-----\n"
+	}
+
+	// Convert Public Key to byte slice
+	return []byte(keyByteString)
 }
 
 // Run a command with optional stdin and args, and return stdout, stderr
@@ -1889,4 +1947,15 @@ func (pr *progressReader) Read(p []byte) (n int, err error) {
 	n, err = pr.Reader.Read(p)
 	pr.Reporter(n)
 	return n, err
+}
+
+// Returns HZN_DEVICE_ID or HZN_NODE_ID env variables depending on which is defined
+func GetDeviceId() string {
+	deviceId := ""
+	if nodeId := os.Getenv("HZN_NODE_ID"); nodeId != "" {
+		deviceId = nodeId
+	} else if deviceIdEnv := os.Getenv("HZN_DEVICE_ID"); deviceIdEnv != "" {
+		deviceId = deviceIdEnv
+	}
+	return deviceId
 }
