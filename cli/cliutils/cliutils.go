@@ -3,6 +3,7 @@ package cliutils
 import (
 	"bufio"
 	"bytes"
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
@@ -1589,10 +1590,16 @@ func GetSigningKeys(privKeyFilePath, pubKeyFilePath string) (string, []byte, str
 	// Get default private key if -k not specified
 	var privKey *rsa.PrivateKey
 	privKeyFilePath_tmp := WithDefaultEnvVar(&privKeyFilePath, "HZN_PRIVATE_KEY_FILE")
-	privKeyFilePath = VerifySigningKeyInput(*privKeyFilePath_tmp, false)
-	if privKey, err = sign.ReadPrivateKey(privKeyFilePath); err != nil {
-		Fatal(CLI_INPUT_ERROR, i18n.GetMessagePrinter().Sprintf("provided private key is not valid; error: %v", err))
-	}
+	privKeyFilePath = WithDefaultKeyFile(*privKeyFilePath_tmp, false)
+	if privKeyFilePath != "" {
+		if privKey, err = sign.ReadPrivateKey(privKeyFilePath); err != nil {
+			Fatal(CLI_INPUT_ERROR, i18n.GetMessagePrinter().Sprintf("provided private key is not valid (%v); error: %v", privKeyFilePath, err))
+		}
+	// if there is no given private key or defualt value, generate private 
+	// and public key pair
+	} else if privKey, err = rsa.GenerateKey(rand.Reader, 2048); err != nil {
+		Fatal(CLI_GENERAL_ERROR, i18n.GetMessagePrinter().Sprintf("private key could not be generated; error: %v", err))
+	} 
 
 	// Load in public key, if given
 	var pubKeyBytes []byte
