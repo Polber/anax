@@ -77,6 +77,10 @@ func getAgreements(archivedAgreements bool) (apiAgreements []agbot.Agreement) {
 	apiOutput := make(map[string]map[string][]agbot.Agreement, 0)
 	cliutils.HorizonGet("agreement", []int{200}, &apiOutput, false)
 
+	var jeff_output string
+	cliutils.HorizonGet("agreement", []int{200}, &jeff_output, false)
+	cliutils.Verbose(msgPrinter.Sprintf("API Output:\n\n%s\n\n", jeff_output))
+
 	var ok bool
 	if _, ok = apiOutput["agreements"]; !ok {
 		cliutils.Fatal(cliutils.HTTP_ERROR, msgPrinter.Sprintf("horizon api agreement output did not include 'agreements' key"))
