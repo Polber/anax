@@ -160,7 +160,7 @@ func (w *GovernanceWorker) StartMicroservice(ms_key string, agreementId string, 
 							fn = fmt.Sprintf("%v.pem", key)
 						}
 
-						// Keys for different services might have the same key name like service.public.pem so prepend something unique like the agreement id
+						// Keys for different services might have the same key name like publish.public.pem so prepend something unique like the agreement id
 						// but then we have to make sure we delete the key when done with it
 						prepend_string := prepend_key_string + "_" + strconv.Itoa(num_signing_keys) + "_"
 						num_signing_keys += 1

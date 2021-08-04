@@ -1303,12 +1303,12 @@
       "translation": "Horizon Exchange 内でパターンを作成/更新するために必要なメタデータを含む JSON ファイルへのパス。 {Sampledir}/pattern.json を参照してください。 標準入力から読み取るには、-f- を指定します。"
     },
     {
-      "id": "The path of a private key file to be used to sign the pattern. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.private.key is the default.",
-      "translation": "パターンを署名するために使用する秘密鍵ファイルへのパス。 指定されていない場合、環境変数 HZN_PRIVATE_KEY_FILE が使用されます。 いずれも設定されていない場合、~/.hzn/keys/service.private.key がデフォルトです。"
+      "id": "The path of a private key file to be used to sign the pattern. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.private.key is the default.",
+      "translation": "パターンを署名するために使用する秘密鍵ファイルへのパス。 指定されていない場合、環境変数 HZN_PRIVATE_KEY_FILE が使用されます。 いずれも設定されていない場合、~/.hzn/keys/publish.private.key がデフォルトです。"
     },
     {
-      "id": "The path of public key file (that corresponds to the private key) that should be stored with the pattern, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/service.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the pattern. The Horizon Agent needs to import the public key to verify the signature.",
-      "translation": "パターンと一緒に保存する (秘密鍵に対応した) 公開鍵ファイルへのパス。Horizon エージェントは署名を検査するためにこれを使用します。 これが指定されておらず、-k フラグも指定されていない場合、環境変数 HZN_PUBLIC_KEY_FILE が使用されます。 HZN_PUBLIC_KEY_FILE が設定されていない場合、~/.hzn/keys/service.public.pem がデフォルトです。 -k が指定されていて、このフラグが指定されていない場合、公開鍵ファイルはパターンと一緒に保存されません。 Horizon エージェントは署名を検査するために公開鍵をインポートする必要があります。"
+      "id": "The path of public key file (that corresponds to the private key) that should be stored with the pattern, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/publish.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the pattern. The Horizon Agent needs to import the public key to verify the signature.",
+      "translation": "パターンと一緒に保存する (秘密鍵に対応した) 公開鍵ファイルへのパス。Horizon エージェントは署名を検査するためにこれを使用します。 これが指定されておらず、-k フラグも指定されていない場合、環境変数 HZN_PUBLIC_KEY_FILE が使用されます。 HZN_PUBLIC_KEY_FILE が設定されていない場合、~/.hzn/keys/publish.public.pem がデフォルトです。 -k が指定されていて、このフラグが指定されていない場合、公開鍵ファイルはパターンと一緒に保存されません。 Horizon エージェントは署名を検査するために公開鍵をインポートする必要があります。"
     },
     {
       "id": "The name to use for this pattern in the Horizon exchange. If not specified, will default to the base name of the file path specified in -f.",
@@ -1355,8 +1355,8 @@
       "translation": "検査するパターン。"
     },
     {
-      "id": "The path of a pem public key file to be used to verify the pattern. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "translation": "パターンを検査するために使用する pem 公開鍵ファイルへのパス。 指定されていない場合、環境変数 HZN_PUBLIC_KEY_FILE が使用されます。 いずれも設定されていない場合、~/.hzn/keys/service.public.pem がデフォルトです。"
+      "id": "The path of a pem public key file to be used to verify the pattern. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "translation": "パターンを検査するために使用する pem 公開鍵ファイルへのパス。 指定されていない場合、環境変数 HZN_PUBLIC_KEY_FILE が使用されます。 いずれも設定されていない場合、~/.hzn/keys/publish.public.pem がデフォルトです。"
     },
     {
       "id": "List and manage services in the Horizon Exchange",
@@ -1451,12 +1451,12 @@
       "translation": "Horizon Exchange 内でサービスを作成/更新するために必要なメタデータを含む JSON ファイルへのパス。 {Sampledir}/service.json および {Sampledir_1}/service_cluster.json を参照してください。 標準入力から読み取るには、-f- を指定します。"
     },
     {
-      "id": "The path of a private key file to be used to sign the service. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.private.key is the default.",
-      "translation": "サービスを署名するために使用する秘密鍵ファイルへのパス。 指定されていない場合、環境変数 HZN_PRIVATE_KEY_FILE が使用されます。 いずれも設定されていない場合、~/.hzn/keys/service.private.key がデフォルトです。"
+      "id": "The path of a private key file to be used to sign the service. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.private.key is the default.",
+      "translation": "サービスを署名するために使用する秘密鍵ファイルへのパス。 指定されていない場合、環境変数 HZN_PRIVATE_KEY_FILE が使用されます。 いずれも設定されていない場合、~/.hzn/keys/publish.private.key がデフォルトです。"
     },
     {
-      "id": "The path of public key file (that corresponds to the private key) that should be stored with the service, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/service.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the service. The Horizon Agent needs to import the public key to verify the signature.",
-      "translation": "サービスと一緒に保存する (秘密鍵に対応した) 公開鍵ファイルへのパス。Horizon エージェントは署名を検査するためにこれを使用します。 これが指定されておらず、-k フラグも指定されていない場合、環境変数 HZN_PUBLIC_KEY_FILE が使用されます。 HZN_PUBLIC_KEY_FILE が設定されていない場合、~/.hzn/keys/service.public.pem がデフォルトです。 -k が指定されていて、このフラグが指定されていない場合、公開鍵ファイルはサービスと一緒に保存されません。 Horizon エージェントは署名を検査するために公開鍵をインポートする必要があります。"
+      "id": "The path of public key file (that corresponds to the private key) that should be stored with the service, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/publish.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the service. The Horizon Agent needs to import the public key to verify the signature.",
+      "translation": "サービスと一緒に保存する (秘密鍵に対応した) 公開鍵ファイルへのパス。Horizon エージェントは署名を検査するためにこれを使用します。 これが指定されておらず、-k フラグも指定されていない場合、環境変数 HZN_PUBLIC_KEY_FILE が使用されます。 HZN_PUBLIC_KEY_FILE が設定されていない場合、~/.hzn/keys/publish.public.pem がデフォルトです。 -k が指定されていて、このフラグが指定されていない場合、公開鍵ファイルはサービスと一緒に保存されません。 Horizon エージェントは署名を検査するために公開鍵をインポートする必要があります。"
     },
     {
       "id": "The image paths in the deployment field have regular tags and should not be changed to sha256 digest values. The image will not get automatically uploaded to the repository. This should only be used during development when testing new versions often.",
@@ -1527,8 +1527,8 @@
       "translation": "検査するサービス。"
     },
     {
-      "id": "The path of a pem public key file to be used to verify the service. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "translation": "サービスを検査するために使用する pem 公開鍵ファイルへのパス。 指定されていない場合、環境変数 HZN_PUBLIC_KEY_FILE が使用されます。 いずれも設定されていない場合、~/.hzn/keys/service.public.pem がデフォルトです。"
+      "id": "The path of a pem public key file to be used to verify the service. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "translation": "サービスを検査するために使用する pem 公開鍵ファイルへのパス。 指定されていない場合、環境変数 HZN_PUBLIC_KEY_FILE が使用されます。 いずれも設定されていない場合、~/.hzn/keys/publish.public.pem がデフォルトです。"
     },
     {
       "id": "Display the status of the Horizon Exchange.",
@@ -1623,12 +1623,12 @@
       "translation": "鍵ペア・ファイルを保存するディレクトリー。 -k および -K とは同時に指定することはできません。 ファイル名はランダムに生成されます。"
     },
     {
-      "id": "The full path of the private key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.private.key is the default.",
-      "translation": "秘密鍵ファイルの絶対パス。 -d とは同時に指定することはできません。 指定されていない場合、環境変数 HZN_PRIVATE_KEY_FILE が使用されます。 いずれも設定されていない場合、~/.hzn/keys/service.private.key がデフォルトです。"
+      "id": "The full path of the private key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.private.key is the default.",
+      "translation": "秘密鍵ファイルの絶対パス。 -d とは同時に指定することはできません。 指定されていない場合、環境変数 HZN_PRIVATE_KEY_FILE が使用されます。 いずれも設定されていない場合、~/.hzn/keys/publish.private.key がデフォルトです。"
     },
     {
-      "id": "The full path of the public key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "translation": "公開鍵ファイルの絶対パス。 -d とは同時に指定することはできません。 指定されていない場合、環境変数 HZN_PUBLIC_KEY_FILE が使用されます。 いずれも設定されていない場合、~/.hzn/keys/service.public.pem がデフォルトです。"
+      "id": "The full path of the public key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "translation": "公開鍵ファイルの絶対パス。 -d とは同時に指定することはできません。 指定されていない場合、環境変数 HZN_PUBLIC_KEY_FILE が使用されます。 いずれも設定されていない場合、~/.hzn/keys/publish.public.pem がデフォルトです。"
     },
     {
       "id": "Overwrite the existing files. It will skip the 'do you want to overwrite' prompt.",
@@ -1651,8 +1651,8 @@
       "translation": "署名公開鍵を Horizon エージェントにインポートします。"
     },
     {
-      "id": "The path of a pem public key file to be imported. The base name in the path is also used as the key name in the Horizon agent. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "translation": "インポートする pem 公開鍵ファイルへのパス。 パスのベース名は、Horizon エージェントで鍵名としても使用されます。 指定されていない場合、環境変数 HZN_PUBLIC_KEY_FILE が使用されます。 いずれも設定されていない場合、~/.hzn/keys/service.public.pem がデフォルトです。"
+      "id": "The path of a pem public key file to be imported. The base name in the path is also used as the key name in the Horizon agent. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "translation": "インポートする pem 公開鍵ファイルへのパス。 パスのベース名は、Horizon エージェントで鍵名としても使用されます。 指定されていない場合、環境変数 HZN_PUBLIC_KEY_FILE が使用されます。 いずれも設定されていない場合、~/.hzn/keys/publish.public.pem がデフォルトです。"
     },
     {
       "id": "List the signing keys that have been imported into this Horizon agent.",
@@ -1831,8 +1831,8 @@
       "translation": "アップロードまたはダウンロードされるオブジェクト・データのハッシュ。コマンドが自動的にハッシュを計算するのを許可するのではなく、ハッシュを指定したい場合、このフラグを使用します。ハッシュは、SHA1 アルゴリズムまたは SHA256 アルゴリズムのいずれかを使用して生成される必要があります。SHA256 を使用してハッシュが生成された場合は、-a フラグが指定される必要があります。このフラグは、--noIntegrity と同時に指定することはできません。"
     },
     {
-      "id": "The path of a private key file to be used to sign the object. The corresponding public key will be stored in the MMS to ensure integrity of the object. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used to find a private key. If not set, ~/.hzn/keys/service.private.key will be used. If it does not exist, an RSA key pair is generated only for this publish operation and then the private key is discarded.",
-      "translation": "オブジェクトに署名するために使用される秘密鍵ファイルのパス。オブジェクトの保全性を確保するため、対応する公開鍵は MMS に保管されます。指定されていない場合、秘密鍵を見つけるために環境変数 HZN_PRIVATE_KEY_FILE が使用されます。設定されていない場合、~/.hzn/keys/service.private.key が使用されます。これが存在しない場合、このパブリッシュ操作用にのみ RSA 鍵ペアが生成され、その後で秘密鍵は破棄されます。"
+      "id": "The path of a private key file to be used to sign the object. The corresponding public key will be stored in the MMS to ensure integrity of the object. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used to find a private key. If not set, ~/.hzn/keys/publish.private.key will be used. If it does not exist, an RSA key pair is generated only for this publish operation and then the private key is discarded.",
+      "translation": "オブジェクトに署名するために使用される秘密鍵ファイルのパス。オブジェクトの保全性を確保するため、対応する公開鍵は MMS に保管されます。指定されていない場合、秘密鍵を見つけるために環境変数 HZN_PRIVATE_KEY_FILE が使用されます。設定されていない場合、~/.hzn/keys/publish.private.key が使用されます。これが存在しない場合、このパブリッシュ操作用にのみ RSA 鍵ペアが生成され、その後で秘密鍵は破棄されます。"
     },
     {
       "id": "Display the status of the Horizon Model Management Service.",

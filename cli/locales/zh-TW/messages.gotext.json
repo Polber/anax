@@ -2952,15 +2952,15 @@
       "fuzzy": true
     },
     {
-      "id": "The path of a private key file to be used to sign the pattern. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.private.key is the default.",
-      "message": "The path of a private key file to be used to sign the pattern. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.private.key is the default.",
-      "translation": "用來簽署型樣之私密金鑰檔的路徑。 如果未指定，則將會使用環境變數 HZN_PRIVATE_KEY_FILE。 如果未設定任何一項，則 ~/.hzn/keys/service.private.key 是預設值。",
+      "id": "The path of a private key file to be used to sign the pattern. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.private.key is the default.",
+      "message": "The path of a private key file to be used to sign the pattern. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.private.key is the default.",
+      "translation": "用來簽署型樣之私密金鑰檔的路徑。 如果未指定，則將會使用環境變數 HZN_PRIVATE_KEY_FILE。 如果未設定任何一項，則 ~/.hzn/keys/publish.private.key 是預設值。",
       "fuzzy": true
     },
     {
-      "id": "The path of public key file (that corresponds to the private key) that should be stored with the pattern, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/service.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the pattern. The Horizon Agent needs to import the public key to verify the signature.",
-      "message": "The path of public key file (that corresponds to the private key) that should be stored with the pattern, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/service.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the pattern. The Horizon Agent needs to import the public key to verify the signature.",
-      "translation": "應該與型樣一起儲存的公開金鑰檔（對應於私密金鑰）的路徑，Horizon Agent 將使用公開金鑰來驗證簽章。 如果未指定該項及 -k 旗標，則將會使用環境變數 HZN_PUBLIC_KEY_FILE。 如果未設定 HZN_PUBLIC_KEY_FILE，則 ~/.hzn/keys/service.public.pem 為預設值。 如果指定了 -k 但未指定此旗標，則不會隨型樣儲存任何公開金鑰檔。 Horizon 代理程式需要匯入公開金鑰來驗證簽章。",
+      "id": "The path of public key file (that corresponds to the private key) that should be stored with the pattern, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/publish.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the pattern. The Horizon Agent needs to import the public key to verify the signature.",
+      "message": "The path of public key file (that corresponds to the private key) that should be stored with the pattern, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/publish.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the pattern. The Horizon Agent needs to import the public key to verify the signature.",
+      "translation": "應該與型樣一起儲存的公開金鑰檔（對應於私密金鑰）的路徑，Horizon Agent 將使用公開金鑰來驗證簽章。 如果未指定該項及 -k 旗標，則將會使用環境變數 HZN_PUBLIC_KEY_FILE。 如果未設定 HZN_PUBLIC_KEY_FILE，則 ~/.hzn/keys/publish.public.pem 為預設值。 如果指定了 -k 但未指定此旗標，則不會隨型樣儲存任何公開金鑰檔。 Horizon 代理程式需要匯入公開金鑰來驗證簽章。",
       "fuzzy": true
     },
     {
@@ -3030,9 +3030,9 @@
       "fuzzy": true
     },
     {
-      "id": "The path of a pem public key file to be used to verify the pattern. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "message": "The path of a pem public key file to be used to verify the pattern. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "translation": "用來驗證型樣之 pem 公開金鑰檔的路徑。 如果未指定，則將會使用環境變數 HZN_PUBLIC_KEY_FILE。 如果未設定任何一項，則 ~/.hzn/keys/service.public.pem 是預設值。",
+      "id": "The path of a pem public key file to be used to verify the pattern. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "message": "The path of a pem public key file to be used to verify the pattern. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "translation": "用來驗證型樣之 pem 公開金鑰檔的路徑。 如果未指定，則將會使用環境變數 HZN_PUBLIC_KEY_FILE。 如果未設定任何一項，則 ~/.hzn/keys/publish.public.pem 是預設值。",
       "fuzzy": true
     },
     {
@@ -3192,15 +3192,15 @@
       "fuzzy": true
     },
     {
-      "id": "The path of a private key file to be used to sign the service. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.private.key is the default.",
-      "message": "The path of a private key file to be used to sign the service. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.private.key is the default.",
-      "translation": "用來簽署服務之私密金鑰檔的路徑。 如果未指定，則將會使用環境變數 HZN_PRIVATE_KEY_FILE。 如果未設定任何一項，則 ~/.hzn/keys/service.private.key 是預設值。",
+      "id": "The path of a private key file to be used to sign the service. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.private.key is the default.",
+      "message": "The path of a private key file to be used to sign the service. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.private.key is the default.",
+      "translation": "用來簽署服務之私密金鑰檔的路徑。 如果未指定，則將會使用環境變數 HZN_PRIVATE_KEY_FILE。 如果未設定任何一項，則 ~/.hzn/keys/publish.private.key 是預設值。",
       "fuzzy": true
     },
     {
-      "id": "The path of public key file (that corresponds to the private key) that should be stored with the service, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/service.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the service. The Horizon Agent needs to import the public key to verify the signature.",
-      "message": "The path of public key file (that corresponds to the private key) that should be stored with the service, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/service.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the service. The Horizon Agent needs to import the public key to verify the signature.",
-      "translation": "應該與服務一起儲存的公開金鑰檔（對應於私密金鑰）的路徑，Horizon Agent 將使用公開金鑰來驗證簽章。 如果未指定該項及 -k 旗標，則將會使用環境變數 HZN_PUBLIC_KEY_FILE。 如果未設定 HZN_PUBLIC_KEY_FILE，則 ~/.hzn/keys/service.public.pem 為預設值。 如果指定了 -k 但未指定此旗標，則不會隨服務儲存任何公開金鑰檔。 Horizon 代理程式需要匯入公開金鑰來驗證簽章。",
+      "id": "The path of public key file (that corresponds to the private key) that should be stored with the service, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/publish.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the service. The Horizon Agent needs to import the public key to verify the signature.",
+      "message": "The path of public key file (that corresponds to the private key) that should be stored with the service, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/publish.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the service. The Horizon Agent needs to import the public key to verify the signature.",
+      "translation": "應該與服務一起儲存的公開金鑰檔（對應於私密金鑰）的路徑，Horizon Agent 將使用公開金鑰來驗證簽章。 如果未指定該項及 -k 旗標，則將會使用環境變數 HZN_PUBLIC_KEY_FILE。 如果未設定 HZN_PUBLIC_KEY_FILE，則 ~/.hzn/keys/publish.public.pem 為預設值。 如果指定了 -k 但未指定此旗標，則不會隨服務儲存任何公開金鑰檔。 Horizon 代理程式需要匯入公開金鑰來驗證簽章。",
       "fuzzy": true
     },
     {
@@ -3306,9 +3306,9 @@
       "fuzzy": true
     },
     {
-      "id": "The path of a pem public key file to be used to verify the service. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "message": "The path of a pem public key file to be used to verify the service. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "translation": "要用來驗證服務之 pem 公開金鑰檔的路徑。 如果未指定，則將會使用環境變數 HZN_PUBLIC_KEY_FILE。 如果未設定任何一項，則 ~/.hzn/keys/service.public.pem 是預設值。",
+      "id": "The path of a pem public key file to be used to verify the service. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "message": "The path of a pem public key file to be used to verify the service. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "translation": "要用來驗證服務之 pem 公開金鑰檔的路徑。 如果未指定，則將會使用環境變數 HZN_PUBLIC_KEY_FILE。 如果未設定任何一項，則 ~/.hzn/keys/publish.public.pem 是預設值。",
       "fuzzy": true
     },
     {
@@ -3450,15 +3450,15 @@
       "fuzzy": true
     },
     {
-      "id": "The full path of the private key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.private.key is the default.",
-      "message": "The full path of the private key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.private.key is the default.",
-      "translation": "私密金鑰檔的完整路徑。 與 -d 互斥。 如果未指定，則將會使用環境變數 HZN_PRIVATE_KEY_FILE。 如果未設定任何一項，則 ~/.hzn/keys/service.private.key 是預設值。",
+      "id": "The full path of the private key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.private.key is the default.",
+      "message": "The full path of the private key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.private.key is the default.",
+      "translation": "私密金鑰檔的完整路徑。 與 -d 互斥。 如果未指定，則將會使用環境變數 HZN_PRIVATE_KEY_FILE。 如果未設定任何一項，則 ~/.hzn/keys/publish.private.key 是預設值。",
       "fuzzy": true
     },
     {
-      "id": "The full path of the public key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "message": "The full path of the public key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "translation": "公開金鑰檔的完整路徑。 與 -d 互斥。 如果未指定，則將會使用環境變數 HZN_PUBLIC_KEY_FILE。 如果未設定任何一項，則 ~/.hzn/keys/service.public.pem 是預設值。",
+      "id": "The full path of the public key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "message": "The full path of the public key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "translation": "公開金鑰檔的完整路徑。 與 -d 互斥。 如果未指定，則將會使用環境變數 HZN_PUBLIC_KEY_FILE。 如果未設定任何一項，則 ~/.hzn/keys/publish.public.pem 是預設值。",
       "fuzzy": true
     },
     {
@@ -3492,9 +3492,9 @@
       "fuzzy": true
     },
     {
-      "id": "The path of a pem public key file to be imported. The base name in the path is also used as the key name in the Horizon agent. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "message": "The path of a pem public key file to be imported. The base name in the path is also used as the key name in the Horizon agent. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "translation": "要匯入之 pem 公開金鑰檔的路徑。 路徑中的基本名稱也會用來作為 Horizon 代理程式中的金鑰名稱。 如果未指定，則將會使用環境變數 HZN_PUBLIC_KEY_FILE。 如果未設定任何一項，則 ~/.hzn/keys/service.public.pem 是預設值。",
+      "id": "The path of a pem public key file to be imported. The base name in the path is also used as the key name in the Horizon agent. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "message": "The path of a pem public key file to be imported. The base name in the path is also used as the key name in the Horizon agent. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "translation": "要匯入之 pem 公開金鑰檔的路徑。 路徑中的基本名稱也會用來作為 Horizon 代理程式中的金鑰名稱。 如果未指定，則將會使用環境變數 HZN_PUBLIC_KEY_FILE。 如果未設定任何一項，則 ~/.hzn/keys/publish.public.pem 是預設值。",
       "fuzzy": true
     },
     {
@@ -3762,9 +3762,9 @@
       "fuzzy": true
     },
     {
-      "id": "The path of a private key file to be used to sign the object. The corresponding public key will be stored in the MMS to ensure integrity of the object. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used to find a private key. If not set, ~/.hzn/keys/service.private.key will be used. If it does not exist, an RSA key pair is generated only for this publish operation and then the private key is discarded.",
-      "message": "The path of a private key file to be used to sign the object. The corresponding public key will be stored in the MMS to ensure integrity of the object. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used to find a private key. If not set, ~/.hzn/keys/service.private.key will be used. If it does not exist, an RSA key pair is generated only for this publish operation and then the private key is discarded.",
-      "translation": "要用來簽署物件之私密金鑰檔的路徑。對應的公開金鑰將儲存在 MMS 中，以確保物件的完整性。如果未指定，則將會使用環境變數 HZN_PRIVATE_KEY_FILE 來尋找私密金鑰。如果未設定，則將使用 ~/.hzn/keys/service.private.key。如果它不存在，則只會針對此發佈作業產生 RSA 金鑰組，私密金鑰隨後被捨棄。",
+      "id": "The path of a private key file to be used to sign the object. The corresponding public key will be stored in the MMS to ensure integrity of the object. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used to find a private key. If not set, ~/.hzn/keys/publish.private.key will be used. If it does not exist, an RSA key pair is generated only for this publish operation and then the private key is discarded.",
+      "message": "The path of a private key file to be used to sign the object. The corresponding public key will be stored in the MMS to ensure integrity of the object. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used to find a private key. If not set, ~/.hzn/keys/publish.private.key will be used. If it does not exist, an RSA key pair is generated only for this publish operation and then the private key is discarded.",
+      "translation": "要用來簽署物件之私密金鑰檔的路徑。對應的公開金鑰將儲存在 MMS 中，以確保物件的完整性。如果未指定，則將會使用環境變數 HZN_PRIVATE_KEY_FILE 來尋找私密金鑰。如果未設定，則將使用 ~/.hzn/keys/publish.private.key。如果它不存在，則只會針對此發佈作業產生 RSA 金鑰組，私密金鑰隨後被捨棄。",
       "fuzzy": true
     },
     {

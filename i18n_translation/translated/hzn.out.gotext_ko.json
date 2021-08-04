@@ -1303,12 +1303,12 @@
       "translation": "Horizon exchange에서 패턴을 작성/업데이트하는 데 필요한 메타데이터가 포함된 JSON 파일의 경로입니다. {Sampledir}/pattern.json을 참조하십시오. stdin에서 읽으려면 -f-를 지정하십시오."
     },
     {
-      "id": "The path of a private key file to be used to sign the pattern. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.private.key is the default.",
-      "translation": "패턴에 서명하는 데 사용할 개인 키 파일의 경로입니다. 지정하지 않으면 환경 변수 HZN_PRIVATE_KEY_FILE이 사용됩니다. 아무 것도 설정하지 않으면 ~/.hzn/keys/service.private.key가 기본값이 됩니다."
+      "id": "The path of a private key file to be used to sign the pattern. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.private.key is the default.",
+      "translation": "패턴에 서명하는 데 사용할 개인 키 파일의 경로입니다. 지정하지 않으면 환경 변수 HZN_PRIVATE_KEY_FILE이 사용됩니다. 아무 것도 설정하지 않으면 ~/.hzn/keys/publish.private.key가 기본값이 됩니다."
     },
     {
-      "id": "The path of public key file (that corresponds to the private key) that should be stored with the pattern, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/service.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the pattern. The Horizon Agent needs to import the public key to verify the signature.",
-      "translation": "패턴과 함께 저장할 공개 키 파일(개인 키에 해당)의 경로이며, Horizon 에이전트가 서명을 확인하는 데 사용합니다. 이 플래그와 -k 플래그가 둘 다 지정되지 않으면 환경 변수 HZN_PUBLIC_KEY_FILE이 사용됩니다. HZN_PUBLIC_KEY_FILE을 설정하지 않으면 ~/.hzn/keys/service.public.pem이 기본값이 됩니다. -k를 지정하고 이 플래그는 지정하지 않으면 공개 키 파일이 패턴과 함께 저장되지 않습니다. Horizon 에이전트는 공개 키를 가져와 서명을 확인해야 합니다."
+      "id": "The path of public key file (that corresponds to the private key) that should be stored with the pattern, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/publish.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the pattern. The Horizon Agent needs to import the public key to verify the signature.",
+      "translation": "패턴과 함께 저장할 공개 키 파일(개인 키에 해당)의 경로이며, Horizon 에이전트가 서명을 확인하는 데 사용합니다. 이 플래그와 -k 플래그가 둘 다 지정되지 않으면 환경 변수 HZN_PUBLIC_KEY_FILE이 사용됩니다. HZN_PUBLIC_KEY_FILE을 설정하지 않으면 ~/.hzn/keys/publish.public.pem이 기본값이 됩니다. -k를 지정하고 이 플래그는 지정하지 않으면 공개 키 파일이 패턴과 함께 저장되지 않습니다. Horizon 에이전트는 공개 키를 가져와 서명을 확인해야 합니다."
     },
     {
       "id": "The name to use for this pattern in the Horizon exchange. If not specified, will default to the base name of the file path specified in -f.",
@@ -1355,8 +1355,8 @@
       "translation": "확인할 패턴입니다."
     },
     {
-      "id": "The path of a pem public key file to be used to verify the pattern. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "translation": "패턴을 확인하는 데 사용할 pem 공개 키 파일의 경로입니다. 지정하지 않으면 환경 변수 HZN_PUBLIC_KEY_FILE이 사용됩니다. 아무 것도 설정하지 않으면 ~/.hzn/keys/service.public.pem이 기본값이 됩니다."
+      "id": "The path of a pem public key file to be used to verify the pattern. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "translation": "패턴을 확인하는 데 사용할 pem 공개 키 파일의 경로입니다. 지정하지 않으면 환경 변수 HZN_PUBLIC_KEY_FILE이 사용됩니다. 아무 것도 설정하지 않으면 ~/.hzn/keys/publish.public.pem이 기본값이 됩니다."
     },
     {
       "id": "List and manage services in the Horizon Exchange",
@@ -1451,12 +1451,12 @@
       "translation": "Horizon exchange에서 서비스를 작성/업데이트하는 데 필요한 메타데이터가 포함된 JSON 파일의 경로입니다. {Sampledir}/service.json과 {Sampledir_1}/service_cluster.json을 참조하십시오. stdin에서 읽으려면 -f-를 지정하십시오."
     },
     {
-      "id": "The path of a private key file to be used to sign the service. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.private.key is the default.",
-      "translation": "서비스에 서명하는 데 사용할 개인 키 파일의 경로입니다. 지정하지 않으면 환경 변수 HZN_PRIVATE_KEY_FILE이 사용됩니다. 아무 것도 설정하지 않으면 ~/.hzn/keys/service.private.key가 기본값이 됩니다."
+      "id": "The path of a private key file to be used to sign the service. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.private.key is the default.",
+      "translation": "서비스에 서명하는 데 사용할 개인 키 파일의 경로입니다. 지정하지 않으면 환경 변수 HZN_PRIVATE_KEY_FILE이 사용됩니다. 아무 것도 설정하지 않으면 ~/.hzn/keys/publish.private.key가 기본값이 됩니다."
     },
     {
-      "id": "The path of public key file (that corresponds to the private key) that should be stored with the service, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/service.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the service. The Horizon Agent needs to import the public key to verify the signature.",
-      "translation": "서비스와 함께 저장할 공개 키 파일(개인 키에 해당)의 경로이며, Horizon 에이전트가 서명을 확인하는 데 사용됩니다. 이 플래그와 -k 플래그가 둘 다 지정되지 않으면 환경 변수 HZN_PUBLIC_KEY_FILE이 사용됩니다. HZN_PUBLIC_KEY_FILE을 설정하지 않으면 ~/.hzn/keys/service.public.pem이 기본값이 됩니다. -k를 지정하고 이 플래그는 지정하지 않으면 공개 키 파일이 서비스와 함께 저장되지 않습니다. Horizon 에이전트는 공개 키를 가져와 서명을 확인해야 합니다."
+      "id": "The path of public key file (that corresponds to the private key) that should be stored with the service, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/publish.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the service. The Horizon Agent needs to import the public key to verify the signature.",
+      "translation": "서비스와 함께 저장할 공개 키 파일(개인 키에 해당)의 경로이며, Horizon 에이전트가 서명을 확인하는 데 사용됩니다. 이 플래그와 -k 플래그가 둘 다 지정되지 않으면 환경 변수 HZN_PUBLIC_KEY_FILE이 사용됩니다. HZN_PUBLIC_KEY_FILE을 설정하지 않으면 ~/.hzn/keys/publish.public.pem이 기본값이 됩니다. -k를 지정하고 이 플래그는 지정하지 않으면 공개 키 파일이 서비스와 함께 저장되지 않습니다. Horizon 에이전트는 공개 키를 가져와 서명을 확인해야 합니다."
     },
     {
       "id": "The image paths in the deployment field have regular tags and should not be changed to sha256 digest values. The image will not get automatically uploaded to the repository. This should only be used during development when testing new versions often.",
@@ -1527,8 +1527,8 @@
       "translation": "확인할 서비스입니다."
     },
     {
-      "id": "The path of a pem public key file to be used to verify the service. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "translation": "서비스를 확인하는 데 사용할 pem 공개 키 파일의 경로입니다. 지정하지 않으면 환경 변수 HZN_PUBLIC_KEY_FILE이 사용됩니다. 아무 것도 설정하지 않으면 ~/.hzn/keys/service.public.pem이 기본값이 됩니다."
+      "id": "The path of a pem public key file to be used to verify the service. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "translation": "서비스를 확인하는 데 사용할 pem 공개 키 파일의 경로입니다. 지정하지 않으면 환경 변수 HZN_PUBLIC_KEY_FILE이 사용됩니다. 아무 것도 설정하지 않으면 ~/.hzn/keys/publish.public.pem이 기본값이 됩니다."
     },
     {
       "id": "Display the status of the Horizon Exchange.",
@@ -1623,12 +1623,12 @@
       "translation": "키 쌍 파일을 넣을 디렉토리입니다. -k 및 --K와 상호 배타적입니다. 파일 이름이 랜덤으로 생성됩니다."
     },
     {
-      "id": "The full path of the private key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.private.key is the default.",
-      "translation": "개인 키 파일의 전체 경로입니다. -d와 상호 배타적입니다. 지정하지 않으면 환경 변수 HZN_PRIVATE_KEY_FILE이 사용됩니다. 아무 것도 설정하지 않으면 ~/.hzn/keys/service.private.key가 기본값이 됩니다."
+      "id": "The full path of the private key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.private.key is the default.",
+      "translation": "개인 키 파일의 전체 경로입니다. -d와 상호 배타적입니다. 지정하지 않으면 환경 변수 HZN_PRIVATE_KEY_FILE이 사용됩니다. 아무 것도 설정하지 않으면 ~/.hzn/keys/publish.private.key가 기본값이 됩니다."
     },
     {
-      "id": "The full path of the public key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "translation": "공개 키 파일의 전체 경로입니다. -d와 상호 배타적입니다. 지정하지 않으면 환경 변수 HZN_PUBLIC_KEY_FILE이 사용됩니다. 아무 것도 설정하지 않으면 ~/.hzn/keys/service.public.pem이 기본값이 됩니다."
+      "id": "The full path of the public key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "translation": "공개 키 파일의 전체 경로입니다. -d와 상호 배타적입니다. 지정하지 않으면 환경 변수 HZN_PUBLIC_KEY_FILE이 사용됩니다. 아무 것도 설정하지 않으면 ~/.hzn/keys/publish.public.pem이 기본값이 됩니다."
     },
     {
       "id": "Overwrite the existing files. It will skip the 'do you want to overwrite' prompt.",
@@ -1651,8 +1651,8 @@
       "translation": "Horizon 에이전트로 서명 공개 키를 가져옵니다."
     },
     {
-      "id": "The path of a pem public key file to be imported. The base name in the path is also used as the key name in the Horizon agent. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "translation": "가져올 pem 공개 키 파일의 경로입니다. 경로의 기본 이름은 Horizon 에이전트에서 키 이름으로도 사용됩니다. 지정하지 않으면 환경 변수 HZN_PUBLIC_KEY_FILE이 사용됩니다. 아무 것도 설정하지 않으면 ~/.hzn/keys/service.public.pem이 기본값이 됩니다."
+      "id": "The path of a pem public key file to be imported. The base name in the path is also used as the key name in the Horizon agent. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "translation": "가져올 pem 공개 키 파일의 경로입니다. 경로의 기본 이름은 Horizon 에이전트에서 키 이름으로도 사용됩니다. 지정하지 않으면 환경 변수 HZN_PUBLIC_KEY_FILE이 사용됩니다. 아무 것도 설정하지 않으면 ~/.hzn/keys/publish.public.pem이 기본값이 됩니다."
     },
     {
       "id": "List the signing keys that have been imported into this Horizon agent.",
@@ -1831,8 +1831,8 @@
       "translation": "업로드 또는 다운로드 중인 오브젝트 데이터의 해시입니다. 명령에서 자동으로 해시를 계산하도록 허용하는 대신 해시를 제공하려는 경우 이 플래그를 사용하십시오. 해시는 SHA1 또는 SHA256 알고리즘을 사용하여 생성해야 합니다. SHA256을 사용하여 해시가 생성된 경우 -a 플래그를 지정해야 합니다. 이 플래그는 -noIntegrity와 상호 배타적입니다."
     },
     {
-      "id": "The path of a private key file to be used to sign the object. The corresponding public key will be stored in the MMS to ensure integrity of the object. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used to find a private key. If not set, ~/.hzn/keys/service.private.key will be used. If it does not exist, an RSA key pair is generated only for this publish operation and then the private key is discarded.",
-      "translation": "오브젝트에 서명하는 데 사용할 개인 키 파일의 경로입니다. 대응하는 공개 키는 오브젝트의 무결성을 보장하기 위해 MMS에 저장됩니다. 지정하지 않으면 개인 키를 찾기 위해 환경 변수 HZN_PRIVATE_KEY_FILE이 사용됩니다. 설정하지 않으면 ~/.hzn/keys/service.private.key가 사용됩니다. 존재하지 않으면 이 공개 오퍼레이션에 대해서만 RSA 키 쌍이 생성되고 개인 키는 삭제됩니다."
+      "id": "The path of a private key file to be used to sign the object. The corresponding public key will be stored in the MMS to ensure integrity of the object. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used to find a private key. If not set, ~/.hzn/keys/publish.private.key will be used. If it does not exist, an RSA key pair is generated only for this publish operation and then the private key is discarded.",
+      "translation": "오브젝트에 서명하는 데 사용할 개인 키 파일의 경로입니다. 대응하는 공개 키는 오브젝트의 무결성을 보장하기 위해 MMS에 저장됩니다. 지정하지 않으면 개인 키를 찾기 위해 환경 변수 HZN_PRIVATE_KEY_FILE이 사용됩니다. 설정하지 않으면 ~/.hzn/keys/publish.private.key가 사용됩니다. 존재하지 않으면 이 공개 오퍼레이션에 대해서만 RSA 키 쌍이 생성되고 개인 키는 삭제됩니다."
     },
     {
       "id": "Display the status of the Horizon Model Management Service.",

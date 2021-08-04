@@ -2952,15 +2952,15 @@
       "fuzzy": true
     },
     {
-      "id": "The path of a private key file to be used to sign the pattern. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.private.key is the default.",
-      "message": "The path of a private key file to be used to sign the pattern. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.private.key is the default.",
-      "translation": "O caminho de um arquivo de chave privado a ser usado para assinar o padrão. Se não especificado, a variável de ambiente HZN_PRIVATE_KEY_FILE será usada. Caso nenhum dos dois seja especificado, ~/.hzn/keys/service.private.key será o padrão.",
+      "id": "The path of a private key file to be used to sign the pattern. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.private.key is the default.",
+      "message": "The path of a private key file to be used to sign the pattern. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.private.key is the default.",
+      "translation": "O caminho de um arquivo de chave privado a ser usado para assinar o padrão. Se não especificado, a variável de ambiente HZN_PRIVATE_KEY_FILE será usada. Caso nenhum dos dois seja especificado, ~/.hzn/keys/publish.private.key será o padrão.",
       "fuzzy": true
     },
     {
-      "id": "The path of public key file (that corresponds to the private key) that should be stored with the pattern, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/service.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the pattern. The Horizon Agent needs to import the public key to verify the signature.",
-      "message": "The path of public key file (that corresponds to the private key) that should be stored with the pattern, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/service.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the pattern. The Horizon Agent needs to import the public key to verify the signature.",
-      "translation": "O caminho do arquivo de chave pública (que corresponde à chave privada) que deve ser armazenado com o padrão, a ser usado pelo Horizon Agent para verificar a assinatura. Se esse item e as sinalizações -k não forem especificados, a variável de ambiente HZN_PUBLIC_KEY_FILE será usada. Se HZN_PUBLIC_KEY_FILE não for configurado, ~/.hzn/keys/service.public.pem será o padrão. Se -k for especificado e essa sinalização não for especificada, nenhum arquivo de chave pública será armazenado com o padrão. O Horizon Agent precisa importar a chave pública para verificar a assinatura.",
+      "id": "The path of public key file (that corresponds to the private key) that should be stored with the pattern, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/publish.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the pattern. The Horizon Agent needs to import the public key to verify the signature.",
+      "message": "The path of public key file (that corresponds to the private key) that should be stored with the pattern, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/publish.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the pattern. The Horizon Agent needs to import the public key to verify the signature.",
+      "translation": "O caminho do arquivo de chave pública (que corresponde à chave privada) que deve ser armazenado com o padrão, a ser usado pelo Horizon Agent para verificar a assinatura. Se esse item e as sinalizações -k não forem especificados, a variável de ambiente HZN_PUBLIC_KEY_FILE será usada. Se HZN_PUBLIC_KEY_FILE não for configurado, ~/.hzn/keys/publish.public.pem será o padrão. Se -k for especificado e essa sinalização não for especificada, nenhum arquivo de chave pública será armazenado com o padrão. O Horizon Agent precisa importar a chave pública para verificar a assinatura.",
       "fuzzy": true
     },
     {
@@ -3030,9 +3030,9 @@
       "fuzzy": true
     },
     {
-      "id": "The path of a pem public key file to be used to verify the pattern. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "message": "The path of a pem public key file to be used to verify the pattern. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "translation": "O caminho de um arquivo de chave pública pem a ser usado para verificar o padrão. Se não especificado, a variável de ambiente HZN_PUBLIC_KEY_FILE será usada. Caso nenhum deles seja especificado, ~/.hzn/keys/service.public.pem será o padrão.",
+      "id": "The path of a pem public key file to be used to verify the pattern. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "message": "The path of a pem public key file to be used to verify the pattern. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "translation": "O caminho de um arquivo de chave pública pem a ser usado para verificar o padrão. Se não especificado, a variável de ambiente HZN_PUBLIC_KEY_FILE será usada. Caso nenhum deles seja especificado, ~/.hzn/keys/publish.public.pem será o padrão.",
       "fuzzy": true
     },
     {
@@ -3192,15 +3192,15 @@
       "fuzzy": true
     },
     {
-      "id": "The path of a private key file to be used to sign the service. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.private.key is the default.",
-      "message": "The path of a private key file to be used to sign the service. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.private.key is the default.",
-      "translation": "O caminho de um arquivo de chave privado a ser usado para assinar o serviço. Se não especificado, a variável de ambiente HZN_PRIVATE_KEY_FILE será usada. Caso nenhum dos dois seja especificado, ~/.hzn/keys/service.private.key será o padrão.",
+      "id": "The path of a private key file to be used to sign the service. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.private.key is the default.",
+      "message": "The path of a private key file to be used to sign the service. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.private.key is the default.",
+      "translation": "O caminho de um arquivo de chave privado a ser usado para assinar o serviço. Se não especificado, a variável de ambiente HZN_PRIVATE_KEY_FILE será usada. Caso nenhum dos dois seja especificado, ~/.hzn/keys/publish.private.key será o padrão.",
       "fuzzy": true
     },
     {
-      "id": "The path of public key file (that corresponds to the private key) that should be stored with the service, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/service.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the service. The Horizon Agent needs to import the public key to verify the signature.",
-      "message": "The path of public key file (that corresponds to the private key) that should be stored with the service, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/service.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the service. The Horizon Agent needs to import the public key to verify the signature.",
-      "translation": "O caminho do arquivo de chave pública (que corresponde à chave privada) que deve ser armazenado com o serviço, a ser usado pelo Horizon Agent para verificar a assinatura. Se esse item e as sinalizações -k não forem especificados, a variável de ambiente HZN_PUBLIC_KEY_FILE será usada. Se HZN_PUBLIC_KEY_FILE não for configurado, ~/.hzn/keys/service.public.pem será o padrão. Se -k for especificado e essa sinalização não for especificada, nenhum arquivo de chave pública será armazenado com o serviço. O Horizon Agent precisa importar a chave pública para verificar a assinatura.",
+      "id": "The path of public key file (that corresponds to the private key) that should be stored with the service, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/publish.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the service. The Horizon Agent needs to import the public key to verify the signature.",
+      "message": "The path of public key file (that corresponds to the private key) that should be stored with the service, to be used by the Horizon Agent to verify the signature. If both this and -k flags are not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If HZN_PUBLIC_KEY_FILE is not set, ~/.hzn/keys/publish.public.pem is the default. If -k is specified and this flag is not specified, then no public key file will be stored with the service. The Horizon Agent needs to import the public key to verify the signature.",
+      "translation": "O caminho do arquivo de chave pública (que corresponde à chave privada) que deve ser armazenado com o serviço, a ser usado pelo Horizon Agent para verificar a assinatura. Se esse item e as sinalizações -k não forem especificados, a variável de ambiente HZN_PUBLIC_KEY_FILE será usada. Se HZN_PUBLIC_KEY_FILE não for configurado, ~/.hzn/keys/publish.public.pem será o padrão. Se -k for especificado e essa sinalização não for especificada, nenhum arquivo de chave pública será armazenado com o serviço. O Horizon Agent precisa importar a chave pública para verificar a assinatura.",
       "fuzzy": true
     },
     {
@@ -3306,9 +3306,9 @@
       "fuzzy": true
     },
     {
-      "id": "The path of a pem public key file to be used to verify the service. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "message": "The path of a pem public key file to be used to verify the service. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "translation": "O caminho de um arquivo de chave pública pem a ser usado para verificar o serviço. Se não especificado, a variável de ambiente HZN_PUBLIC_KEY_FILE será usada. Caso nenhum deles seja especificado, ~/.hzn/keys/service.public.pem será o padrão.",
+      "id": "The path of a pem public key file to be used to verify the service. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "message": "The path of a pem public key file to be used to verify the service. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "translation": "O caminho de um arquivo de chave pública pem a ser usado para verificar o serviço. Se não especificado, a variável de ambiente HZN_PUBLIC_KEY_FILE será usada. Caso nenhum deles seja especificado, ~/.hzn/keys/publish.public.pem será o padrão.",
       "fuzzy": true
     },
     {
@@ -3450,15 +3450,15 @@
       "fuzzy": true
     },
     {
-      "id": "The full path of the private key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.private.key is the default.",
-      "message": "The full path of the private key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.private.key is the default.",
-      "translation": "O caminho completo do arquivo de chave privado. Mutuamente exclusivo com -d. Se não especificado, a variável de ambiente HZN_PRIVATE_KEY_FILE será usada. Caso nenhum dos dois seja especificado, ~/.hzn/keys/service.private.key será o padrão.",
+      "id": "The full path of the private key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.private.key is the default.",
+      "message": "The full path of the private key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.private.key is the default.",
+      "translation": "O caminho completo do arquivo de chave privado. Mutuamente exclusivo com -d. Se não especificado, a variável de ambiente HZN_PRIVATE_KEY_FILE será usada. Caso nenhum dos dois seja especificado, ~/.hzn/keys/publish.private.key será o padrão.",
       "fuzzy": true
     },
     {
-      "id": "The full path of the public key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "message": "The full path of the public key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "translation": "O caminho completo do arquivo de chave pública. Mutuamente exclusivo com -d. Se não especificado, a variável de ambiente HZN_PUBLIC_KEY_FILE será usada. Caso nenhum deles seja especificado, ~/.hzn/keys/service.public.pem será o padrão.",
+      "id": "The full path of the public key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "message": "The full path of the public key file. Mutually exclusive with -d. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "translation": "O caminho completo do arquivo de chave pública. Mutuamente exclusivo com -d. Se não especificado, a variável de ambiente HZN_PUBLIC_KEY_FILE será usada. Caso nenhum deles seja especificado, ~/.hzn/keys/publish.public.pem será o padrão.",
       "fuzzy": true
     },
     {
@@ -3492,9 +3492,9 @@
       "fuzzy": true
     },
     {
-      "id": "The path of a pem public key file to be imported. The base name in the path is also used as the key name in the Horizon agent. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "message": "The path of a pem public key file to be imported. The base name in the path is also used as the key name in the Horizon agent. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/service.public.pem is the default.",
-      "translation": "O caminho de um arquivo de chave pública pem a ser importado. O nome base no caminho também é usado como o nome da chave no Horizon Agent. Se não especificado, a variável de ambiente HZN_PUBLIC_KEY_FILE será usada. Caso nenhum deles seja especificado, ~/.hzn/keys/service.public.pem será o padrão.",
+      "id": "The path of a pem public key file to be imported. The base name in the path is also used as the key name in the Horizon agent. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "message": "The path of a pem public key file to be imported. The base name in the path is also used as the key name in the Horizon agent. If not specified, the environment variable HZN_PUBLIC_KEY_FILE will be used. If none of them are set, ~/.hzn/keys/publish.public.pem is the default.",
+      "translation": "O caminho de um arquivo de chave pública pem a ser importado. O nome base no caminho também é usado como o nome da chave no Horizon Agent. Se não especificado, a variável de ambiente HZN_PUBLIC_KEY_FILE será usada. Caso nenhum deles seja especificado, ~/.hzn/keys/publish.public.pem será o padrão.",
       "fuzzy": true
     },
     {
@@ -3762,9 +3762,9 @@
       "fuzzy": true
     },
     {
-      "id": "The path of a private key file to be used to sign the object. The corresponding public key will be stored in the MMS to ensure integrity of the object. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used to find a private key. If not set, ~/.hzn/keys/service.private.key will be used. If it does not exist, an RSA key pair is generated only for this publish operation and then the private key is discarded.",
-      "message": "The path of a private key file to be used to sign the object. The corresponding public key will be stored in the MMS to ensure integrity of the object. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used to find a private key. If not set, ~/.hzn/keys/service.private.key will be used. If it does not exist, an RSA key pair is generated only for this publish operation and then the private key is discarded.",
-      "translation": "O caminho de um arquivo de chave privado a ser usado para assinar o objeto. A chave pública correspondente será armazenada no MMS para garantir a integridade do objeto. Se não for especificado, a variável de ambiente HZN_PRIVATE_KEY_FILE será usada para localizar uma chave privada. Se não for configurado, ~/.hzn/keys/service.private.key será usado. Se ele não existir, um par de chaves RSA será gerado apenas para esta operação de publicação e, em seguida, a chave privada será descartada.",
+      "id": "The path of a private key file to be used to sign the object. The corresponding public key will be stored in the MMS to ensure integrity of the object. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used to find a private key. If not set, ~/.hzn/keys/publish.private.key will be used. If it does not exist, an RSA key pair is generated only for this publish operation and then the private key is discarded.",
+      "message": "The path of a private key file to be used to sign the object. The corresponding public key will be stored in the MMS to ensure integrity of the object. If not specified, the environment variable HZN_PRIVATE_KEY_FILE will be used to find a private key. If not set, ~/.hzn/keys/publish.private.key will be used. If it does not exist, an RSA key pair is generated only for this publish operation and then the private key is discarded.",
+      "translation": "O caminho de um arquivo de chave privado a ser usado para assinar o objeto. A chave pública correspondente será armazenada no MMS para garantir a integridade do objeto. Se não for especificado, a variável de ambiente HZN_PRIVATE_KEY_FILE será usada para localizar uma chave privada. Se não for configurado, ~/.hzn/keys/publish.private.key será usado. Se ele não existir, um par de chaves RSA será gerado apenas para esta operação de publicação e, em seguida, a chave privada será descartada.",
       "fuzzy": true
     },
     {

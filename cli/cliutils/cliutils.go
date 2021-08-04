@@ -60,8 +60,8 @@ const (
 	ANAX_CONFIG_FILE    = "/etc/horizon/anax.json"
 
 	// default keys will be prepended with $HOME
-	DEFAULT_PRIVATE_KEY_FILE = ".hzn/keys/service.private.key"
-	DEFAULT_PUBLIC_KEY_FILE  = ".hzn/keys/service.public.pem"
+	DEFAULT_PRIVATE_KEY_FILE = ".hzn/keys/publish.private.key"
+	DEFAULT_PUBLIC_KEY_FILE  = ".hzn/keys/publish.public.pem"
 
 	// http request body types
 	HTTP_REQ_BODYTYPE_DEFAULT = 0
