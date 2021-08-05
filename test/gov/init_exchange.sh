@@ -156,37 +156,37 @@ CR8UANAX=$(curl -sLX POST $CERT_VAR --header 'Content-Type: application/json' --
 echo "$CR8UANAX"
 
 echo "Registering Anax device1..."
-REGANAX1=$(curl -sLX PUT $CERT_VAR --header 'Content-Type: application/json' --header 'Accept: application/json' -u "e2edev@somecomp.com/anax1:anax1pw" -d '{"token":"abcdefg","name":"anaxdev","registeredServices":[],"msgEndPoint":"","softwareVersions":{},"publicKey":"","pattern":"","arch":"${ARCH}"}' "${EXCH_URL}/orgs/e2edev@somecomp.com/nodes/an12345" | jq -r '.msg')
+REGANAX1=$(curl -sLX PUT $CERT_VAR --header 'Content-Type: application/json' --header 'Accept: application/json' -u "e2edev@somecomp.com/anax1:anax1pw" -d '{"token":"Abcdefghijklmno1","name":"anaxdev","registeredServices":[],"msgEndPoint":"","softwareVersions":{},"publicKey":"","pattern":"","arch":"${ARCH}"}' "${EXCH_URL}/orgs/e2edev@somecomp.com/nodes/an12345" | jq -r '.msg')
 echo "$REGANAX1"
 
 echo "Registering Anax device2..."
-REGANAX2=$(curl -sLX PUT $CERT_VAR --header 'Content-Type: application/json' --header 'Accept: application/json' -u "e2edev@somecomp.com/anax1:anax1pw" -d '{"token":"abcdefg","name":"anaxdev","registeredServices":[],"msgEndPoint":"","softwareVersions":{},"publicKey":"","pattern":"","arch":"${ARCH}"}' "${EXCH_URL}/orgs/e2edev@somecomp.com/nodes/an54321" | jq -r '.msg')
+REGANAX2=$(curl -sLX PUT $CERT_VAR --header 'Content-Type: application/json' --header 'Accept: application/json' -u "e2edev@somecomp.com/anax1:anax1pw" -d '{"token":"Abcdefghijklmno1","name":"anaxdev","registeredServices":[],"msgEndPoint":"","softwareVersions":{},"publicKey":"","pattern":"","arch":"${ARCH}"}' "${EXCH_URL}/orgs/e2edev@somecomp.com/nodes/an54321" | jq -r '.msg')
 echo "$REGANAX2"
 
 # register an anax devices for userdev in order to test the case where the pattern is from a different org than the device org.
 echo "Registering Anax device1 in userdev org..."
-REGUANAX1=$(curl -sLX PUT $CERT_VAR --header 'Content-Type: application/json' --header 'Accept: application/json' -u "userdev/useranax1:useranax1pw" -d '{"token":"abcdefg","name":"anaxdev","registeredServices":[],"msgEndPoint":"","softwareVersions":{},"publicKey":"","pattern":"","arch":"${ARCH}"}' "${EXCH_URL}/orgs/userdev/nodes/an12345" | jq -r '.msg')
+REGUANAX1=$(curl -sLX PUT $CERT_VAR --header 'Content-Type: application/json' --header 'Accept: application/json' -u "userdev/useranax1:useranax1pw" -d '{"token":"Abcdefghijklmno1","name":"anaxdev","registeredServices":[],"msgEndPoint":"","softwareVersions":{},"publicKey":"","pattern":"","arch":"${ARCH}"}' "${EXCH_URL}/orgs/userdev/nodes/an12345" | jq -r '.msg')
 echo "$REGUANAX1"
 
 echo "Registering Anax device2 in userdev org..."
-REGUANAX2=$(curl -sLX PUT $CERT_VAR --header 'Content-Type: application/json' --header 'Accept: application/json' -u "userdev/useranax1:useranax1pw" -d '{"token":"abcdefg","name":"anaxdev","registeredServices":[],"msgEndPoint":"","softwareVersions":{},"publicKey":"","pattern":"","arch":"${ARCH}"}' "${EXCH_URL}/orgs/userdev/nodes/an54321" | jq -r '.msg')
+REGUANAX2=$(curl -sLX PUT $CERT_VAR --header 'Content-Type: application/json' --header 'Accept: application/json' -u "userdev/useranax1:useranax1pw" -d '{"token":"Abcdefghijklmno1","name":"anaxdev","registeredServices":[],"msgEndPoint":"","softwareVersions":{},"publicKey":"","pattern":"","arch":"${ARCH}"}' "${EXCH_URL}/orgs/userdev/nodes/an54321" | jq -r '.msg')
 echo "$REGUANAX2"
 
 echo "Registering Anax device1 in customer org..."
-REGANAX1C=$(curl -sLX PUT $CERT_VAR --header 'Content-Type: application/json' --header 'Accept: application/json' -u "Customer1/icpadmin:icpadminpw" -d '{"token":"abcdefg","name":"anaxdev","registeredServices":[],"msgEndPoint":"","softwareVersions":{},"publicKey":"","pattern":"","arch":"${ARCH}"}' "${EXCH_URL}/orgs/Customer1/nodes/an12345" | jq -r '.msg')
+REGANAX1C=$(curl -sLX PUT $CERT_VAR --header 'Content-Type: application/json' --header 'Accept: application/json' -u "Customer1/icpadmin:icpadminpw" -d '{"token":"Abcdefghijklmno1","name":"anaxdev","registeredServices":[],"msgEndPoint":"","softwareVersions":{},"publicKey":"","pattern":"","arch":"${ARCH}"}' "${EXCH_URL}/orgs/Customer1/nodes/an12345" | jq -r '.msg')
 echo "$REGANAX1C"
 
 DEVICE_NUM=6
 NUM_AGENTS=$((${MULTIAGENTS}+$DEVICE_NUM))
 while [ ${DEVICE_NUM} -lt ${NUM_AGENTS} ]; do
   echo "Registering Anax device${DEVICE_NUM}..."
-  REGANAXMUL=$(curl -sLX PUT $CERT_VAR --header 'Content-Type: application/json' --header 'Accept: application/json' -u "e2edev@somecomp.com/anax1:anax1pw" -d '{"token":"abcdefg","name":"anaxdev","registeredServices":[],"msgEndPoint":"","softwareVersions":{},"publicKey":"","pattern":"","arch":"${ARCH}"}' "${EXCH_URL}/orgs/e2edev@somecomp.com/nodes/anaxdevice${DEVICE_NUM}" | jq -r '.msg')
+  REGANAXMUL=$(curl -sLX PUT $CERT_VAR --header 'Content-Type: application/json' --header 'Accept: application/json' -u "e2edev@somecomp.com/anax1:anax1pw" -d '{"token":"Abcdefghijklmno1","name":"anaxdev","registeredServices":[],"msgEndPoint":"","softwareVersions":{},"publicKey":"","pattern":"","arch":"${ARCH}"}' "${EXCH_URL}/orgs/e2edev@somecomp.com/nodes/anaxdevice${DEVICE_NUM}" | jq -r '.msg')
   echo "$REGANAXMUL"
   echo "Registering Anax device${DEVICE_NUM} in userdev org..."
-  REGUANAXMULU=$(curl -sLX PUT $CERT_VAR --header 'Content-Type: application/json' --header 'Accept: application/json' -u "userdev/useranax1:useranax1pw" -d '{"token":"abcdefg","name":"anaxdev","registeredServices":[],"msgEndPoint":"","softwareVersions":{},"publicKey":"","pattern":"","arch":"${ARCH}"}' "${EXCH_URL}/orgs/userdev/nodes/anaxdevice${DEVICE_NUM}" | jq -r '.msg')
+  REGUANAXMULU=$(curl -sLX PUT $CERT_VAR --header 'Content-Type: application/json' --header 'Accept: application/json' -u "userdev/useranax1:useranax1pw" -d '{"token":"Abcdefghijklmno1","name":"anaxdev","registeredServices":[],"msgEndPoint":"","softwareVersions":{},"publicKey":"","pattern":"","arch":"${ARCH}"}' "${EXCH_URL}/orgs/userdev/nodes/anaxdevice${DEVICE_NUM}" | jq -r '.msg')
   echo "$REGUANAXMULU"
   echo "Registering Anax device${DEVICE_NUM} in customer org..."
-  REGANAXMULC=$(curl -sLX PUT $CERT_VAR --header 'Content-Type: application/json' --header 'Accept: application/json' -u "Customer1/icpadmin:icpadminpw" -d '{"token":"abcdefg","name":"anaxdev","registeredServices":[],"msgEndPoint":"","softwareVersions":{},"publicKey":"","pattern":"","arch":"${ARCH}"}' "${EXCH_URL}/orgs/Customer1/nodes/anaxdevice${DEVICE_NUM}" | jq -r '.msg')
+  REGANAXMULC=$(curl -sLX PUT $CERT_VAR --header 'Content-Type: application/json' --header 'Accept: application/json' -u "Customer1/icpadmin:icpadminpw" -d '{"token":"Abcdefghijklmno1","name":"anaxdev","registeredServices":[],"msgEndPoint":"","softwareVersions":{},"publicKey":"","pattern":"","arch":"${ARCH}"}' "${EXCH_URL}/orgs/Customer1/nodes/anaxdevice${DEVICE_NUM}" | jq -r '.msg')
   echo "$REGANAXMULC"
   let DEVICE_NUM=DEVICE_NUM+1
 done
