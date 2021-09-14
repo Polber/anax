@@ -53,8 +53,6 @@ func List() {
 func Log(serviceName string, serviceVersion, containerName string, tailing bool) {
 	msgPrinter := i18n.GetMessagePrinter()
 
-	msgPrinter.Println("Stage 1")
-
 	// if node is not registered
 	horDevice := api.HorizonDevice{}
 	cliutils.HorizonGet("node", []int{200}, &horDevice, false)
@@ -64,13 +62,9 @@ func Log(serviceName string, serviceVersion, containerName string, tailing bool)
 		return
 	}
 
-	msgPrinter.Println("Stage 2")
-
 	refUrl := serviceName
 	// Get the list of running services from the agent.
 	runningServices := api.AllServices{}
-
-	msgPrinter.Println("Stage 3")
 
 	cliutils.HorizonGet("service", []int{200}, &runningServices, false)
 	// Search the list of services to find one that matches the input service name. The service's instance Id
@@ -81,7 +75,7 @@ func Log(serviceName string, serviceVersion, containerName string, tailing bool)
 	var msdefId string
 	org, name := cutil.SplitOrgSpecUrl(refUrl)
 	for _, serviceInstance := range runningServices.Instances["active"] {
-		if serviceVersion == "" || serviceVersion == serviceInstance.Version {
+		if (serviceVersion == "" || serviceVersion == serviceInstance.Version) {
 			if serviceInstance.SpecRef == name && (serviceInstance.Org == org || org == "") {
 				serviceInstanceFound = serviceInstance
 				serviceFound = true
@@ -92,9 +86,6 @@ func Log(serviceName string, serviceVersion, containerName string, tailing bool)
 			}
 		}
 	}
-
-	msgPrinter.Println("Stage 4")
-
 	if serviceFound {
 		instanceId = serviceInstanceFound.InstanceId
 		msdefId = serviceInstanceFound.MicroserviceDefId
@@ -108,8 +99,6 @@ func Log(serviceName string, serviceVersion, containerName string, tailing bool)
 		}
 	}
 
-	msgPrinter.Println("Stage 5")
-
 	// Check service's log-driver to read logs from correct place
 	containerFound := false
 	var nonDefaultLogDriverUsed bool
@@ -122,11 +111,7 @@ func Log(serviceName string, serviceVersion, containerName string, tailing bool)
 				}
 
 				if len(deployment.Services) > 1 && containerName == "" {
-					var cNames []string
-					for name, _ := range deployment.Services {
-						cNames = append(cNames, name)
-					}
-					cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Service definition %v consists of more than one container: %v. Please specify the service name by -c flag", serviceName, strings.Join(cNames, ", ")))
+					cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Service definition %v consists of more than one container. Please specify the container name using the -c flag.", serviceName))
 				}
 				for deployedContainerName, service := range deployment.Services {
 					if containerName == deployedContainerName || (containerName == "" && len(deployment.Services) == 1) {
@@ -143,9 +128,6 @@ func Log(serviceName string, serviceVersion, containerName string, tailing bool)
 			break
 		}
 	}
-
-	msgPrinter.Println("Stage 6")
-
 	if !containerFound && containerName != "" {
 		if serviceVersion == "" {
 			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Container %v is not running as part of service %v.", containerName, serviceName))
@@ -167,12 +149,10 @@ func Log(serviceName string, serviceVersion, containerName string, tailing bool)
 		}
 	}
 
-	msgPrinter.Println("Stage 7")
-
 	if runtime.GOOS == "darwin" || nonDefaultLogDriverUsed {
-		cliutils.LogMac(instanceId+"-"+containerName, tailing)
+		cliutils.LogMac(instanceId, tailing)
 	} else {
-		cliutils.LogLinux(instanceId+"_"+containerName, tailing)
+		cliutils.LogLinux(instanceId, tailing)
 	}
 }
 
