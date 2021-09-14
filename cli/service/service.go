@@ -53,6 +53,8 @@ func List() {
 func Log(serviceName string, serviceVersion, containerName string, tailing bool) {
 	msgPrinter := i18n.GetMessagePrinter()
 
+	msgPrinter.Println("Stage 1")
+
 	// if node is not registered
 	horDevice := api.HorizonDevice{}
 	cliutils.HorizonGet("node", []int{200}, &horDevice, false)
@@ -62,9 +64,13 @@ func Log(serviceName string, serviceVersion, containerName string, tailing bool)
 		return
 	}
 
+	msgPrinter.Println("Stage 2")
+
 	refUrl := serviceName
 	// Get the list of running services from the agent.
 	runningServices := api.AllServices{}
+
+	msgPrinter.Println("Stage 3")
 
 	cliutils.HorizonGet("service", []int{200}, &runningServices, false)
 	// Search the list of services to find one that matches the input service name. The service's instance Id
@@ -86,6 +92,9 @@ func Log(serviceName string, serviceVersion, containerName string, tailing bool)
 			}
 		}
 	}
+
+	msgPrinter.Println("Stage 4")
+
 	if serviceFound {
 		instanceId = serviceInstanceFound.InstanceId
 		msdefId = serviceInstanceFound.MicroserviceDefId
@@ -98,6 +107,8 @@ func Log(serviceName string, serviceVersion, containerName string, tailing bool)
 			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Service %v version %v is not running on the node.", refUrl, serviceVersion))
 		}
 	}
+
+	msgPrinter.Println("Stage 5")
 
 	// Check service's log-driver to read logs from correct place
 	containerFound := false
@@ -132,6 +143,9 @@ func Log(serviceName string, serviceVersion, containerName string, tailing bool)
 			break
 		}
 	}
+
+	msgPrinter.Println("Stage 6")
+
 	if !containerFound && containerName != "" {
 		if serviceVersion == "" {
 			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Container %v is not running as part of service %v.", containerName, serviceName))
@@ -152,6 +166,8 @@ func Log(serviceName string, serviceVersion, containerName string, tailing bool)
 			msgPrinter.Println()
 		}
 	}
+
+	msgPrinter.Println("Stage 7")
 
 	if runtime.GOOS == "darwin" || nonDefaultLogDriverUsed {
 		cliutils.LogMac(instanceId+"-"+containerName, tailing)
