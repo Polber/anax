@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"regexp"
+	"strings"
 	"time"
 
 	"github.com/open-horizon/anax/i18n"
@@ -82,7 +82,6 @@ func LogLinux(instanceId string, tailing bool) {
 	// rotation happened is when the size of the file gets smaller as we are reading it.
 	for {
 		// Get a record (delimited by EOL) from syslog.
-		start := time.Now()
 		if line, err := reader.ReadString('\n'); err != nil {
 			// Any error we get back, even EOF, is treated the same if we are not tailing. Just return to the caller.
 			if !tailing {
@@ -96,18 +95,10 @@ func LogLinux(instanceId string, tailing bool) {
 				// ignore the error and keep trying.
 				Verbose(msgPrinter.Sprintf("Error reading from %v: %v", sysLogPath, err))
 			}
-		} else {
-			duration := time.Since(start)
-			fmt.Print(duration)
-			fmt.Println()
-			start = time.Now()
-			if found, _ := regexp.MatchString("workload-.*"+instanceId, line); found {
-				// If the requested service id is in the current syslog record, display it.
-				duration = time.Since(start)
-				fmt.Print(duration)
-				fmt.Println()
-				fmt.Print(string(line))
-			}
+		// } else if found, _ := regexp.MatchString("workload-.*"+instanceId, line); found {
+		} else if strings.Contains(line, "workload-"+instanceId) {
+			// If the requested service id is in the current syslog record, display it.
+			fmt.Print(string(line))
 		}
 		// Re-check syslog file size via stats in case syslog was logrotated.
 		// If were tailing and there was a non-EOF error, we will always come here.
