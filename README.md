@@ -1,7 +1,5 @@
 # anax
 
-modify
-
 ## Introduction
 
 This project contains the Horizon client system source code. Stable versions of the Horizon agent are packaged for many Debian-based distributions. They are available for download at https://github.com/open-horizon/anax/releases. To build the packages yourself, consult https://github.com/open-horizon/horizon-deb-packager.
