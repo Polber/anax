@@ -28,7 +28,7 @@ type ApiAttributes struct {
 }
 
 // DoIt unregisters this Horizon edge node and resets it so it can be registered again
-func DoIt(forceUnregister, removeNodeUnregister bool, deepClean bool, timeout int) {
+func DoIt(forceUnregister, removeNodeUnregister bool, deepClean bool, timeout int) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -91,9 +91,9 @@ func DoIt(forceUnregister, removeNodeUnregister bool, deepClean bool, timeout in
 			if err := CheckNodeConfigState(180); err != nil {
 				if !deepClean {
 					errmsg := msgPrinter.Sprintf("%v\nThe node was not successfully unregistered, please use 'hzn unregister -D' to ensure the node is completely reset.", err)
-					cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, errmsg)
+					return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, errmsg)
 				} else {
-					cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, err.Error())
+					return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, err.Error())
 				}
 			} else {
 				msgPrinter.Printf("Horizon node unregistered. You may now run 'hzn register ...' again, if desired.")
@@ -101,6 +101,8 @@ func DoIt(forceUnregister, removeNodeUnregister bool, deepClean bool, timeout in
 			}
 		}
 	}
+
+	return nil
 }
 
 //call horizon DELETE /node api, timeout in 3 minutes.
@@ -151,7 +153,10 @@ func DeleteHorizonNode(removeNodeUnregister bool, deepClean bool, timeout int) e
 		case <-time.After(time.Duration(channelWait) * time.Second):
 
 			// Get a list of all agreements so that we can display progress.
-			ags := agreement.GetAgreements(false)
+			ags, err := agreement.GetAgreements(false)
+			if err != nil {
+				return err
+			}
 
 			if timeout != 0 {
 				totalWait = totalWait - channelWait
@@ -214,25 +219,34 @@ func DeepClean() error {
 			}
 
 			cliutils.Verbose(msgPrinter.Sprintf("Looking for horizon container by name: %s", containerName))
-			outBytes, errBytes := cliutils.RunCmd(nil, "/bin/sh", "-c",
+			outBytes, errBytes, err := cliutils.RunCmd(nil, "/bin/sh", "-c",
 				fmt.Sprintf("docker ps | grep %s", containerName))
+			if err != nil {
+				return err
+			}
 			if errBytes != nil && len(errBytes) > 0 {
 				return fmt.Errorf(msgPrinter.Sprintf("Error during checking if anax container is running: %s", errBytes))
 			}
 			if outBytes != nil && len(outBytes) > 0 {
 				cliutils.Verbose(msgPrinter.Sprintf("Restarting horizon container..."))
-				outBytes, errBytes = cliutils.RunCmd(nil, "/bin/sh", "-c",
-					fmt.Sprintf("docker exec %s rm -f /var/horizon/*.db", containerName))
+				if outBytes, errBytes, err = cliutils.RunCmd(nil, "/bin/sh", "-c",
+					fmt.Sprintf("docker exec %s rm -f /var/horizon/*.db", containerName)); err != nil {
+						return err
+					}
 				if errBytes != nil && len(errBytes) > 0 {
 					return fmt.Errorf(msgPrinter.Sprintf("Error during removing horizon db files from horizon container: %s", errBytes))
 				}
-				outBytes, errBytes = cliutils.RunCmd(nil, "/bin/sh", "-c",
-					fmt.Sprintf("docker exec %s rm -Rf /etc/horizon/policy.d/*", containerName))
+				if outBytes, errBytes, err = cliutils.RunCmd(nil, "/bin/sh", "-c",
+					fmt.Sprintf("docker exec %s rm -Rf /etc/horizon/policy.d/*", containerName)); err != nil {
+						return err
+					}
 				if errBytes != nil && len(errBytes) > 0 {
 					return fmt.Errorf(msgPrinter.Sprintf("Error during removing policy files from horizon container: %s", errBytes))
 				}
-				outBytes, errBytes = cliutils.RunCmd(nil, "/bin/sh", "-c",
-					fmt.Sprintf("/usr/local/bin/horizon-container update %d", containerIdx))
+				if outBytes, errBytes, err = cliutils.RunCmd(nil, "/bin/sh", "-c",
+					fmt.Sprintf("/usr/local/bin/horizon-container update %d", containerIdx)); err != nil {
+						return err
+					}
 				if errBytes != nil && len(errBytes) > 0 {
 					return fmt.Errorf(msgPrinter.Sprintf("Error during restarting the anax container: %s", errBytes))
 				}

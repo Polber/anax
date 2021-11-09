@@ -15,7 +15,7 @@ func getStatus(agbot bool) (apiOutput *worker.WorkerStatusManager) {
 	if agbot {
 		// set env to call agbot url
 		if err := os.Setenv("HORIZON_URL", cliutils.GetAgbotUrlBase()); err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "%v", err)
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "%v", err)
 		}
 	}
 
@@ -26,7 +26,7 @@ func getStatus(agbot bool) (apiOutput *worker.WorkerStatusManager) {
 }
 
 // Display status for node or agbot
-func DisplayStatus(details bool, agbot bool) {
+func DisplayStatus(details bool, agbot bool) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -35,7 +35,7 @@ func DisplayStatus(details bool, agbot bool) {
 	if details {
 		jsonBytes, err := json.MarshalIndent(status, "", cliutils.JSON_INDENT)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn status -l' output: %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn status -l' output: %v", err))
 		}
 		fmt.Printf("%s\n", jsonBytes)
 	} else {
@@ -44,8 +44,10 @@ func DisplayStatus(details bool, agbot bool) {
 
 		jsonBytes, err := json.MarshalIndent(workers, "", cliutils.JSON_INDENT)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn status' output: %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn status' output: %v", err))
 		}
 		fmt.Printf("%s\n", jsonBytes)
 	}
+
+	return nil
 }

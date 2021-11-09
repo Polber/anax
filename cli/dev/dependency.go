@@ -105,26 +105,26 @@ func createLogMessage(specRef string, url string, org string, version string, ar
 }
 
 // This is the entry point for the hzn dev dependency fetch command.
-func DependencyFetch(homeDirectory string, project string, specRef string, url string, org string, version string, arch string, userCreds string, userInputFile string) {
+func DependencyFetch(homeDirectory string, project string, specRef string, url string, org string, version string, arch string, userCreds string, userInputFile string, exchangeHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// Check input parameters for correctness.
 	dir, err := verifyFetchInput(homeDirectory, project, specRef, url, org, version, arch, userCreds)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, "'dependency %v' %v", DEPENDENCY_FETCH_COMMAND, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, "'dependency %v' %v", DEPENDENCY_FETCH_COMMAND, err)
 	}
 
 	target := project
 
 	// Go get the dependency metadata.
 	if project != "" {
-		if err := fetchLocalProjectDependency(dir, project, userInputFile); err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'dependency %v' %v", DEPENDENCY_FETCH_COMMAND, err)
+		if err := fetchLocalProjectDependency(dir, project, userInputFile, exchangeHandler); err != nil {
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'dependency %v' %v", DEPENDENCY_FETCH_COMMAND, err)
 		}
 	} else {
-		if err := fetchExchangeProjectDependency(dir, specRef, url, org, version, arch, userCreds, userInputFile); err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'dependency %v' %v", DEPENDENCY_FETCH_COMMAND, err)
+		if err := fetchExchangeProjectDependency(dir, specRef, url, org, version, arch, userCreds, userInputFile, exchangeHandler); err != nil {
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'dependency %v' %v", DEPENDENCY_FETCH_COMMAND, err)
 		}
 
 		// Create the right log message.
@@ -133,54 +133,57 @@ func DependencyFetch(homeDirectory string, project string, specRef string, url s
 
 	msgPrinter.Printf("New dependency created: %v .", target)
 	msgPrinter.Println()
+
+	return nil
 }
 
 // This is the entry point for the hzn dev dependency list command.
-func DependencyList(homeDirectory string) {
+func DependencyList(homeDirectory string) error {
 
 	dir, err := setup(homeDirectory, true, false, "")
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, "'%v %v' %v", DEPENDENCY_COMMAND, DEPENDENCY_LIST_COMMAND, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, "'%v %v' %v", DEPENDENCY_COMMAND, DEPENDENCY_LIST_COMMAND, err)
 	}
 
 	// Get the service definition, so that we can look at the service dependencies.
 	serviceDef, sderr := GetServiceDefinition(dir, SERVICE_DEFINITION_FILE)
 	if sderr != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", DEPENDENCY_COMMAND, DEPENDENCY_LIST_COMMAND, sderr)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", DEPENDENCY_COMMAND, DEPENDENCY_LIST_COMMAND, sderr)
 	}
 
 	// Now get all the dependencies
 	deps, err := GetServiceDependencies(dir, serviceDef.RequiredServices)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", DEPENDENCY_COMMAND, DEPENDENCY_LIST_COMMAND, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", DEPENDENCY_COMMAND, DEPENDENCY_LIST_COMMAND, err)
 	}
 
 	marshalListOut(deps)
 
+	return nil
 }
 
 func marshalListOut(deps interface{}) {
 	jsonBytes, err := json.MarshalIndent(deps, "", "    ")
 	if err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("'%v %v' unable to create json object from dependencies, %v", DEPENDENCY_COMMAND, DEPENDENCY_LIST_COMMAND, err))
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("'%v %v' unable to create json object from dependencies, %v", DEPENDENCY_COMMAND, DEPENDENCY_LIST_COMMAND, err))
 	}
 	fmt.Printf("%v\n", string(jsonBytes))
 }
 
 // This is the entry point for the hzn dev dependency remove command.
-func DependencyRemove(homeDirectory string, specRef string, url string, version string, arch string, org string) {
+func DependencyRemove(homeDirectory string, specRef string, url string, version string, arch string, org string) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// Check input parameters for correctness.
 	dir, err := verifyRemoveInput(homeDirectory, specRef, url, version, arch)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, "'dependency %v' %v", DEPENDENCY_REMOVE_COMMAND, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, "'dependency %v' %v", DEPENDENCY_REMOVE_COMMAND, err)
 	}
 
 	envVarSetting := os.Getenv("HZN_DONT_SUBST_ENV_VARS")
 	if err := os.Setenv("HZN_DONT_SUBST_ENV_VARS", "1"); err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to set env var 'HZN_DONT_SUBST_ENV_VARS', error %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to set env var 'HZN_DONT_SUBST_ENV_VARS', error %v", err))
 	}
 
 	if url != "" {
@@ -189,8 +192,10 @@ func DependencyRemove(homeDirectory string, specRef string, url string, version 
 	removeDependencyAndChildren(dir, specRef, org, version, arch)
 
 	if err := os.Setenv("HZN_DONT_SUBST_ENV_VARS", envVarSetting); err != nil { // restore this setting
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to restore env var 'HZN_DONT_SUBST_ENV_VARS', error %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to restore env var 'HZN_DONT_SUBST_ENV_VARS', error %v", err))
 	}
+
+	return nil
 }
 
 // Returns an os.FileInfo object for each dependency file. This function assumes the caller has
@@ -249,7 +254,7 @@ func DependenciesExists(directory string, okToCreate bool) (bool, error) {
 
 // Validate that the dependencies are complete and coherent with the rest of the definitions in the project.
 // Any errors will be returned to the caller.
-func ValidateDependencies(directory string, userInputs *common.UserInputFile, userInputsFilePath string, projectType string, userCreds string, autoAddDep bool) error {
+func ValidateDependencies(directory string, userInputs *common.UserInputFile, userInputsFilePath string, projectType string, userCreds string, autoAddDep bool, exchangeHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -284,7 +289,7 @@ func ValidateDependencies(directory string, userInputs *common.UserInputFile, us
 			}
 			if !found {
 				if autoAddDep {
-					DependencyFetch(directory, "", "", rs.URL, rs.Org, rs.VersionRange, rs.Arch, userCreds, userInputsFilePath)
+					DependencyFetch(directory, "", "", rs.URL, rs.Org, rs.VersionRange, rs.Arch, userCreds, userInputsFilePath, exchangeHandler)
 					hasNewDepFile = true
 				} else {
 					return errors.New(msgPrinter.Sprintf("dependency %v at version %v does not exist in %v.", rs.URL, rs.VersionRange, path.Join(directory, DEFAULT_DEPENDENCY_DIR)))
@@ -419,22 +424,22 @@ func verifyRemoveInput(homeDirectory string, specRef string, url string, version
 
 // The caller is trying to use a local project (i.e. a project that is on the same machine) as a dependency.
 // If the dependency is a local project then we can validate it and copy the project metadata.
-func fetchLocalProjectDependency(homeDirectory string, project string, userInputFile string) error {
+func fetchLocalProjectDependency(homeDirectory string, project string, userInputFile string, exchangeHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// Get the setup info and context for running the command.
 	dir, err := setup(homeDirectory, true, false, "")
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, "'%v %v' %v", DEPENDENCY_COMMAND, DEPENDENCY_FETCH_COMMAND, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, "'%v %v' %v", DEPENDENCY_COMMAND, DEPENDENCY_FETCH_COMMAND, err)
 	}
 
 	// If the dependent project is not validate-able then we cant reliably use it as a dependency.
 	if err := AbstractServiceValidation(project); err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, "'%v %v' %v", DEPENDENCY_COMMAND, DEPENDENCY_FETCH_COMMAND, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, "'%v %v' %v", DEPENDENCY_COMMAND, DEPENDENCY_FETCH_COMMAND, err)
 	}
 
-	CommonProjectValidation(project, userInputFile, DEPENDENCY_COMMAND, DEPENDENCY_FETCH_COMMAND, "", false)
+	CommonProjectValidation(project, userInputFile, DEPENDENCY_COMMAND, DEPENDENCY_FETCH_COMMAND, "", false, exchangeHandler)
 
 	msgPrinter.Printf("Service project %v verified.", dir)
 	msgPrinter.Println()
@@ -444,7 +449,7 @@ func fetchLocalProjectDependency(homeDirectory string, project string, userInput
 	// then written we want those to preserve the env vars as env vars.
 	envVarSetting := os.Getenv("HZN_DONT_SUBST_ENV_VARS")
 	if err := os.Setenv("HZN_DONT_SUBST_ENV_VARS", "0"); err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to set env var 'HZN_DONT_SUBST_ENV_VARS' to zero, error %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to set env var 'HZN_DONT_SUBST_ENV_VARS' to zero, error %v", err))
 	}
 
 	// get original env vars
@@ -455,13 +460,13 @@ func fetchLocalProjectDependency(homeDirectory string, project string, userInput
 	metadata_vars := map[string]string{}
 	proj_config_file, err := cliconfig.GetProjectConfigFile(project)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Failed to get the hzn.json configuration file under %v directory. Error: %v", project, err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Failed to get the hzn.json configuration file under %v directory. Error: %v", project, err))
 	}
 	// make sure the dependency files are expended with the env vars of their own config file.
 	if proj_config_file != "" {
 		hzn_vars, metadata_vars, err = cliconfig.SetEnvVarsFromConfigFile(proj_config_file, orig_env_vars, true)
 		if err != nil && !os.IsNotExist(err) {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Failed to set the environment variables from configuration file %v. Error: %v", proj_config_file, err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Failed to set the environment variables from configuration file %v. Error: %v", proj_config_file, err))
 		}
 	}
 
@@ -490,12 +495,12 @@ func fetchLocalProjectDependency(homeDirectory string, project string, userInput
 	if proj_config_file != "" {
 		err = cliconfig.RestoreEnvVars(orig_env_vars, hzn_vars, metadata_vars)
 		if err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Failed to restore the environment variables. %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Failed to restore the environment variables. %v", err))
 		}
 	}
 
 	if err := os.Setenv("HZN_DONT_SUBST_ENV_VARS", "1"); err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to set env var 'HZN_DONT_SUBST_ENV_VARS', error %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to set env var 'HZN_DONT_SUBST_ENV_VARS', error %v", err))
 	}
 
 	// Harden the new dependency in a file in this project's dependency store.
@@ -555,18 +560,18 @@ func fetchLocalProjectDependency(homeDirectory string, project string, userInput
 
 	cliutils.Verbose(msgPrinter.Sprintf("Updated %v/%v with the dependency's variable and global attribute configuration.", homeDirectory, USERINPUT_FILE))
 	if err := os.Setenv("HZN_DONT_SUBST_ENV_VARS", envVarSetting); err != nil { // restore this setting
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to restore env var 'HZN_DONT_SUBST_ENV_VARS', error %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to restore env var 'HZN_DONT_SUBST_ENV_VARS', error %v", err))
 	}
 
 	return nil
 }
 
-func fetchExchangeProjectDependency(homeDirectory string, specRef string, url string, org string, version string, arch string, userCreds string, userInputFile string) error {
+func fetchExchangeProjectDependency(homeDirectory string, specRef string, url string, org string, version string, arch string, userCreds string, userInputFile string, exchangeHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// Pull the metadata from the exchange, including any of this dependency's dependencies.
-	sDef, err := getExchangeDefinition(homeDirectory, specRef, url, org, "", arch, userCreds, userInputFile)
+	sDef, err := getExchangeDefinition(homeDirectory, specRef, url, org, "", arch, userCreds, userInputFile, exchangeHandler)
 	if err != nil {
 		return err
 	}
@@ -596,7 +601,7 @@ func UpdateServiceDefandUserInputFile(homeDirectory string, sDef common.Abstract
 	// then written we want those to preserve the env vars as env vars.
 	envVarSetting := os.Getenv("HZN_DONT_SUBST_ENV_VARS")
 	if err := os.Setenv("HZN_DONT_SUBST_ENV_VARS", "1"); err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to set env var 'HZN_DONT_SUBST_ENV_VARS', error %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to set env var 'HZN_DONT_SUBST_ENV_VARS', error %v", err))
 	}
 	defer os.Setenv("HZN_DONT_SUBST_ENV_VARS", envVarSetting) // restore this setting
 
@@ -657,14 +662,14 @@ func UpdateServiceDefandUserInputFile(homeDirectory string, sDef common.Abstract
 	return nil
 }
 
-func getExchangeDefinition(homeDirectory string, specRef string, surl string, org string, version string, arch string, userCreds string, userInputFile string) (common.AbstractServiceFile, error) {
+func getExchangeDefinition(homeDirectory string, specRef string, surl string, org string, version string, arch string, userCreds string, userInputFile string, exchangeHandler cliutils.ServiceHandler) (common.AbstractServiceFile, error) {
 
 	if ex, err := ServiceDefinitionExists(homeDirectory); !ex || err != nil {
 		return nil, errors.New(i18n.GetMessagePrinter().Sprintf("no service definition config file found in project"))
 	} else if ex, err := DependenciesExists(homeDirectory, true); !ex || err != nil {
 		return nil, errors.New(i18n.GetMessagePrinter().Sprintf("no dependency directory found in project"))
 	} else {
-		return getServiceDefinition(homeDirectory, surl, org, version, arch, userCreds)
+		return getServiceDefinition(homeDirectory, surl, org, version, arch, userCreds, exchangeHandler)
 	}
 }
 
@@ -728,11 +733,11 @@ func UpdateDependentDependencies(homeDirectory string, depProject string) error 
 }
 
 // Iterate through the dependencies of the given service and create a dependency for each one.
-func getServiceDefinitionDependencies(homeDirectory string, serviceDef *common.ServiceFile, userCreds string) error {
+func getServiceDefinitionDependencies(homeDirectory string, serviceDef *common.ServiceFile, userCreds string, exchangeHandler cliutils.ServiceHandler) error {
 	for _, rs := range serviceDef.RequiredServices {
 		// Get the service definition for each required service. Dependencies refer to each other by version range, so the
 		// service we're looking for might not be at the exact version specified in the required service element.
-		if sDef, err := getServiceDefinition(homeDirectory, rs.URL, rs.Org, "", rs.Arch, userCreds); err != nil {
+		if sDef, err := getServiceDefinition(homeDirectory, rs.URL, rs.Org, "", rs.Arch, userCreds, exchangeHandler); err != nil {
 			return err
 		} else if err := UpdateDependencyFile(homeDirectory, sDef); err != nil {
 			return err
@@ -743,7 +748,7 @@ func getServiceDefinitionDependencies(homeDirectory string, serviceDef *common.S
 	return nil
 }
 
-func getServiceDefinition(homeDirectory, surl string, org string, version string, arch string, userCreds string) (*common.ServiceFile, error) {
+func getServiceDefinition(homeDirectory, surl string, org string, version string, arch string, userCreds string, exchangeHandler cliutils.ServiceHandler) (*common.ServiceFile, error) {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -765,7 +770,9 @@ func getServiceDefinition(homeDirectory, surl string, org string, version string
 		userCreds = os.Getenv(DEVTOOL_HZN_USER)
 	}
 	cliutils.SetWhetherUsingApiKey(userCreds)
-	cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), resSuffix, cliutils.OrgAndCreds(os.Getenv(DEVTOOL_HZN_ORG), userCreds), []int{200}, resp)
+	if _, err := exchangeHandler.Get(resSuffix, cliutils.OrgAndCreds(os.Getenv(DEVTOOL_HZN_ORG), userCreds), resp); err != nil {
+		return nil, err
+	}
 
 	// Parse the response and extract the highest version service definition or return an error.
 	var serviceDef exchange.ServiceDefinition
@@ -813,7 +820,7 @@ func getServiceDefinition(homeDirectory, surl string, org string, version string
 		auth_url := fmt.Sprintf("orgs/%v/services/%v/dockauths", org, exchange.GetId(serviceId))
 		docker_auths := make([]exchange.ImageDockerAuth, 0)
 		cliutils.SetWhetherUsingApiKey(userCreds)
-		cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), auth_url, cliutils.OrgAndCreds(os.Getenv(DEVTOOL_HZN_ORG), userCreds), []int{200, 404}, &docker_auths)
+		exchangeHandler.Get(auth_url, cliutils.OrgAndCreds(os.Getenv(DEVTOOL_HZN_ORG), userCreds), &docker_auths)
 
 		img_auths := make([]events.ImageDockerAuth, 0)
 		if docker_auths != nil {
@@ -851,7 +858,7 @@ func getServiceDefinition(homeDirectory, surl string, org string, version string
 
 	// If this service has dependencies, bring them in.
 	if serviceDef.HasDependencies() {
-		if err := getServiceDefinitionDependencies(homeDirectory, sDef_cliex, userCreds); err != nil {
+		if err := getServiceDefinitionDependencies(homeDirectory, sDef_cliex, userCreds, exchangeHandler); err != nil {
 			return nil, err
 		}
 	}
@@ -878,7 +885,7 @@ func getDependencyInfo(dir string) ([]*ServiceDependency, error) {
 	for _, s := range svc.RequiredServices {
 		sp := NewServiceSpec(s.URL, s.Org, s.VersionRange, s.Arch)
 		if err := getDependencyDependencyInfo(dir, sp, sp, depFiles, &deps); err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to get dependency info for %v , error %v", sp, err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to get dependency info for %v , error %v", sp, err))
 		}
 	}
 
@@ -922,7 +929,7 @@ func getDependencyDependencyInfo(dir string, spTop *ServiceSpec, sp *ServiceSpec
 			for _, s := range dep.RequiredServices {
 				sp_dep_temp := NewServiceSpec(s.URL, s.Org, s.VersionRange, s.Arch)
 				if err := getDependencyDependencyInfo(dir, spTop, sp_dep_temp, depFiles, deps); err != nil {
-					cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to get dependency info for %v , error %v", sp_dep_temp, err))
+					return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to get dependency info for %v , error %v", sp_dep_temp, err))
 				}
 			}
 		}
@@ -939,7 +946,7 @@ func removeDependencyAndChildren(dir string, specRef string, org string, version
 	topDep := NewServiceSpec(specRef, org, version, arch)
 	deps, err := getDependencyInfo(dir)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("'dependency %v' failed to get a list of dependecies. Error %v", DEPENDENCY_REMOVE_COMMAND, err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("'dependency %v' failed to get a list of dependecies. Error %v", DEPENDENCY_REMOVE_COMMAND, err))
 	}
 
 	cliutils.Verbose(msgPrinter.Sprintf("All dependencies are: %v", deps))
@@ -971,7 +978,7 @@ func removeDependencyAndChildren(dir string, specRef string, org string, version
 	}
 
 	if !found {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("'dependency %v' dependency not found.", DEPENDENCY_REMOVE_COMMAND))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("'dependency %v' dependency not found.", DEPENDENCY_REMOVE_COMMAND))
 	}
 }
 
@@ -1009,7 +1016,7 @@ func removeDependencyFromProject(dir string, sd *ServiceDependency, onlyRemoveFr
 	}
 
 	if err_string != "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, "'dependency %v' %v", DEPENDENCY_REMOVE_COMMAND, err_string)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, "'dependency %v' %v", DEPENDENCY_REMOVE_COMMAND, err_string)
 	}
 
 	// Create the right log message.

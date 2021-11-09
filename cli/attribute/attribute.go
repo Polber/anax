@@ -19,16 +19,18 @@ type OurAttributes struct {
 	Variables    map[string]interface{}   `json:"variables"`
 }
 
-func List() {
+func List() error {
 	// Get the attributes
 	apiOutput := map[string][]api.Attribute{}
-	httpCode, _ := cliutils.HorizonGet("attribute", []int{200, cliutils.ANAX_NOT_CONFIGURED_YET}, &apiOutput, false)
+	httpCode, err := cliutils.HorizonGet("attribute", []int{200, cliutils.ANAX_NOT_CONFIGURED_YET}, &apiOutput, false)
 	if httpCode == cliutils.ANAX_NOT_CONFIGURED_YET {
-		cliutils.Fatal(cliutils.HTTP_ERROR, i18n.GetMessagePrinter().Sprintf(cliutils.MUST_REGISTER_FIRST))
+		return cliutils.CLIError{StatusCode: cliutils.HTTP_ERROR, Message: i18n.GetMessagePrinter().Sprintf(cliutils.MUST_REGISTER_FIRST)}
+	} else if err != nil {
+		return err
 	}
 	var ok bool
 	if _, ok = apiOutput["attributes"]; !ok {
-		cliutils.Fatal(cliutils.HTTP_ERROR, i18n.GetMessagePrinter().Sprintf("horizon api attributes output did not include 'attributes' key"))
+		return cliutils.CLIError{StatusCode: cliutils.HTTP_ERROR, Message: i18n.GetMessagePrinter().Sprintf("horizon api attributes output did not include 'attributes' key")}
 	}
 	apiAttrs := apiOutput["attributes"]
 
@@ -45,7 +47,9 @@ func List() {
 	// Convert to json and output
 	jsonBytes, err := json.MarshalIndent(attrs, "", cliutils.JSON_INDENT)
 	if err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal 'hzn attribute list' output: %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, Message: i18n.GetMessagePrinter().Sprintf("failed to marshal 'hzn attribute list' output: %v", err)}
 	}
 	fmt.Printf("%s\n", jsonBytes)
+
+	return nil
 }

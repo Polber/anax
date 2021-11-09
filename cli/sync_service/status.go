@@ -13,12 +13,12 @@ type MMSHealth struct {
 	DBHealth common.DBHealthStatusInfo `json:"dbHealth"`
 }
 
-func Status(org string, userPw string) {
+func Status(org string, userPw string, mmsHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	if userPw == "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify exchange credentials to access the model management service"))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify exchange credentials to access the model management service"))
 	}
 
 	// Set the API key env var if that's what we're using.
@@ -31,10 +31,16 @@ func Status(org string, userPw string) {
 	urlPath := path.Join("api/v1/health")
 
 	// Call the MMS service over HTTP
-	httpCode := cliutils.ExchangeGet("Model Management Service", cliutils.GetMMSUrl(), urlPath, cliutils.OrgAndCreds(org, userPw), []int{200}, &healthData)
-	if httpCode != 200 {
-		cliutils.Fatal(cliutils.HTTP_ERROR, msgPrinter.Sprintf("health status API returned HTTP code %v", httpCode))
+	if httpCode, err := mmsHandler.Get(urlPath, cliutils.OrgAndCreds(org, userPw), &healthData); err != nil {
+		return err
+	} else if httpCode != 200 {
+		return cliutils.CLIError{StatusCode: cliutils.HTTP_ERROR, msgPrinter.Sprintf("health status API returned HTTP code %v", httpCode))
 	}
-	output := cliutils.MarshalIndent(healthData, "mms health")
+	output, err := cliutils.MarshalIndent(healthData, "mms health")
+	if err != nil {
+		return err
+	}
 	fmt.Println(output)
+
+	return nil
 }

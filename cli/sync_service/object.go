@@ -20,7 +20,6 @@ import (
 	"github.com/open-horizon/rsapss-tool/sign"
 	"hash"
 	"io"
-	"net/http"
 	"os"
 	"path"
 	"regexp"
@@ -40,18 +39,19 @@ type MMSObjectInfo struct {
 }
 
 // Display the object metadata for given flags in the MMS.
-func ObjectList(org string, userPw string, objType string, objId string, destPolicy string, dpService string, dpPropertyName string, dpUpdateTimeSince string, destType string, destId string, withData string, expirationTimeBefore string, deleted string, long bool, details bool) {
+func ObjectList(org string, userPw string, objType string, objId string, destPolicy string, dpService string, dpPropertyName string, dpUpdateTimeSince string, destType string, destId string, withData string, expirationTimeBefore string, deleted string, long bool, details bool, mmsHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	if userPw == "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify exchange credentials to access the model management service."))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify exchange credentials to access the model management service."))
 	}
 
 	// Set the API key env var if that's what we're using.
 	cliutils.SetWhetherUsingApiKey(userPw)
 
 	var objectsMeta []common.MetaData
+	var err error
 
 	// validate params:
 	// 1. if --policy is not omitted, must set value to true or false
@@ -66,7 +66,7 @@ func ObjectList(org string, userPw string, objType string, objId string, destPol
 	// 6. if --deleted is not omitted, must set value to true or false
 	if destPolicy != "" {
 		if strings.ToLower(destPolicy) != "true" && strings.ToLower(destPolicy) != "false" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid --policy/-p value: %s, --policy/-p should be true or false", destPolicy))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid --policy/-p value: %s, --policy/-p should be true or false", destPolicy))
 		} else {
 			destPolicy = strings.ToLower(destPolicy)
 		}
@@ -75,7 +75,7 @@ func ObjectList(org string, userPw string, objType string, objId string, destPol
 	noData := ""
 	if withData != "" {
 		if strings.ToLower(withData) != "true" && strings.ToLower(withData) != "false" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid --data value: %s, --data should be true or false", withData))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid --data value: %s, --data should be true or false", withData))
 		} else {
 			withDataBool, _ := strconv.ParseBool(strings.ToLower(withData))
 			noData = strconv.FormatBool(!withDataBool)
@@ -84,16 +84,16 @@ func ObjectList(org string, userPw string, objType string, objId string, destPol
 
 	if dpService != "" || dpPropertyName != "" || dpUpdateTimeSince != "" {
 		if destPolicy == "false" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must omit --policy or set it to true when filtering by --service, --property, or --updateTime"))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must omit --policy or set it to true when filtering by --service, --property, or --updateTime"))
 		}
 
 		if !dpServiceIsValid(dpService) {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("service should be in format service-org/service-name"))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("service should be in format service-org/service-name"))
 		}
 
 		timeValidated, convTimeStamp := timeIsValid(dpUpdateTimeSince)
 		if !timeValidated {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("updateTime should be in RC3339 format: yyyy-MM-ddTHH:mm:ssZ, or yyyy-MM-dd"))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("updateTime should be in RC3339 format: yyyy-MM-ddTHH:mm:ssZ, or yyyy-MM-dd"))
 		} else {
 			if convTimeStamp != "" {
 				dpUpdateTimeSince = convTimeStamp
@@ -105,18 +105,18 @@ func ObjectList(org string, userPw string, objType string, objId string, destPol
 	}
 
 	if objType == "" && objId != "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify --type with --id"))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify --type with --id"))
 	}
 
 	if destType == "" && destId != "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify destinationType if set destinationId"))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify destinationType if set destinationId"))
 	}
 
 	if strings.ToLower(expirationTimeBefore) == "now" {
 		expirationTimeBefore = time.Now().Format(time.RFC3339)
 	} else {
 		if timeValidated, _ := timeIsValid(expirationTimeBefore); !timeValidated {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("expirationTimeBefore should be specified 'now' or timestamp in RC3339 format: yyyy-MM-ddTHH:mm:ssZ"))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("expirationTimeBefore should be specified 'now' or timestamp in RC3339 format: yyyy-MM-ddTHH:mm:ssZ"))
 		}
 	}
 
@@ -124,7 +124,7 @@ func ObjectList(org string, userPw string, objType string, objId string, destPol
 	if deleted != "" {
 		deletedValue = strings.ToLower(deleted)
 		if deletedValue != "true" && deletedValue != "false" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid --deleted value: %s, --data should be true or false", withData))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid --deleted value: %s, --data should be true or false", withData))
 		}
 	}
 
@@ -134,9 +134,10 @@ func ObjectList(org string, userPw string, objType string, objId string, destPol
 	fullPath := urlPath + filterURLPath
 
 	// Call the MMS service over HTTP to get the basic object metadata.
-	httpCode := cliutils.ExchangeGet("Model Management Service", cliutils.GetMMSUrl(), fullPath, cliutils.OrgAndCreds(org, userPw), []int{200, 404}, &objectsMeta)
-	if httpCode == 404 {
-		cliutils.Fatal(cliutils.NOT_FOUND, msgPrinter.Sprintf("no objects found in org %s", org))
+	if httpCode, err := mmsHandler.Get(fullPath, cliutils.OrgAndCreds(org, userPw), &objectsMeta); err != nil {
+		return err
+	} else if httpCode == 404 {
+		return cliutils.CLIError{StatusCode: cliutils.NOT_FOUND, msgPrinter.Sprintf("no objects found in org %s", org))
 	}
 
 	output := ""
@@ -152,6 +153,7 @@ func ObjectList(org string, userPw string, objType string, objId string, destPol
 
 		mmsObjects := make([]MMSObjectInfo, 0)
 		c := make(chan MMSObjectInfo)
+		errC := make(chan error)
 
 		for i := 0; i < len(batches); i++ {
 			for _, obj := range batches[i] {
@@ -171,8 +173,10 @@ func ObjectList(org string, userPw string, objType string, objId string, destPol
 
 					urlPath := path.Join("api/v1/objects/", org, obj.ObjectType, obj.ObjectID, "destinations")
 
-					httpCode := cliutils.ExchangeGet("Model Management Service", cliutils.GetMMSUrl(), urlPath, cliutils.OrgAndCreds(org, userPw), []int{200, 404}, &objectDests)
-					if httpCode == 404 {
+					if httpCode, err := mmsHandler.Get(urlPath, cliutils.OrgAndCreds(org, userPw), &objectDests); err != nil {
+						errC <- err
+						close(errC)
+					} else if httpCode == 404 {
 						cliutils.Verbose(msgPrinter.Sprintf("destination detail for object '%s' of type '%s' not found in org %s", obj.ObjectID, obj.ObjectType, org))
 					}
 					mmsObjectInfo.Destinations = objectDests
@@ -180,7 +184,10 @@ func ObjectList(org string, userPw string, objType string, objId string, destPol
 					//2. call status API
 					urlPath = path.Join("api/v1/objects/", org, obj.ObjectType, obj.ObjectID, "status")
 					var resp []byte
-					cliutils.ExchangeGet("Model Management Service", cliutils.GetMMSUrl(), urlPath, cliutils.OrgAndCreds(org, userPw), []int{200}, &resp)
+					if _, err := mmsHandler.Get(urlPath, cliutils.OrgAndCreds(org, userPw), &resp); err != nil {
+						errC <- err
+						close(errC)
+					}
 					mmsObjectInfo.ObjectStatus = string(resp)
 
 					//3. write the response data to channel c <- mmsObjectInfo
@@ -190,6 +197,12 @@ func ObjectList(org string, userPw string, objType string, objId string, destPol
 			}
 
 			for range batches[i] {
+				select {
+				case err := <- errC:
+					if err != nil {
+						return err
+					}
+				}
 				select {
 				case mmsObjectInfo := <-c:
 					if long {
@@ -203,7 +216,9 @@ func ObjectList(org string, userPw string, objType string, objId string, destPol
 			}
 		}
 
-		output = cliutils.MarshalIndent(mmsObjects, "mms object list")
+		if output, err = cliutils.MarshalIndent(mmsObjects, "mms object list"); err != nil {
+			return err
+		}
 	} else {
 		if !long {
 			mmsObjects := make([]MMSObjectInfo, 0)
@@ -214,12 +229,14 @@ func ObjectList(org string, userPw string, objType string, objId string, destPol
 				}
 				mmsObjects = append(mmsObjects, mmsObjectInfo)
 			}
-			output = cliutils.MarshalIndent(mmsObjects, "mms object list")
+			if output, err = cliutils.MarshalIndent(mmsObjects, "mms object list"); err != nil {
+				return err
+			}
 		} else {
 			var err1 error
 			output, err1 = cliutils.DisplayAsJson(objectsMeta)
 			if err1 != nil {
-				cliutils.Fatal(cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal 'hzn mms object list' output: %v", err1))
+				return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal 'hzn mms object list' output: %v", err1))
 			}
 		}
 	}
@@ -227,9 +244,11 @@ func ObjectList(org string, userPw string, objType string, objId string, destPol
 	msgPrinter.Printf("Listing objects in org %v:", org)
 	msgPrinter.Println()
 	fmt.Println(output)
+
+	return nil
 }
 
-func ObjectNew(org string) {
+func ObjectNew(org string) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -287,44 +306,48 @@ func ObjectNew(org string) {
 		fmt.Println(s)
 	}
 
+	return nil
 }
 
 // Upload an object to the MMS. The user can provide a copy of the object's metadata in a file, or they can simply provide
 // object id and type.
-func ObjectPublish(org string, userPw string, objType string, objId string, objPattern string, objMetadataFile string, objFile string, skipDigitalSig bool, dsHashAlgo string, dsHash string, privKeyFilePath string) {
+func ObjectPublish(org string, userPw string, objType string, objId string, objPattern string, objMetadataFile string, objFile string, skipDigitalSig bool, dsHashAlgo string, dsHash string, privKeyFilePath string, mmsHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// Validate the inputs because the combination of inputs that are required is complex.
 	if userPw == "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify exchange credentials to access the model management service"))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify exchange credentials to access the model management service"))
 	}
 
 	if objType == "" && objId != "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify --type with --id"))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify --type with --id"))
 	} else if objType != "" && objId == "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify --id with --type"))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify --id with --type"))
 	} else if objType != "" && objMetadataFile != "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("cannot specify --id and --type with --def"))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("cannot specify --id and --type with --def"))
 	} else if objType == "" && objMetadataFile == "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify either --type and --id or --def"))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify either --type and --id or --def"))
 	} else if objPattern != "" && objMetadataFile != "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("cannot specify --pattern with --def"))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("cannot specify --pattern with --def"))
 	} else if skipDigitalSig && dsHash != "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("cannot specify --skipDigitalSig with --hash"))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("cannot specify --skipDigitalSig with --hash"))
 	} else if skipDigitalSig && dsHashAlgo != "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("cannot specify --skipDigitalSig with --hashAlgo"))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("cannot specify --skipDigitalSig with --hashAlgo"))
 	} else if dsHashAlgo != "" && dsHashAlgo != common.Sha1 && dsHashAlgo != common.Sha256 {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("invalid value for --hashAlgo, please use SHA1 or SHA256"))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("invalid value for --hashAlgo, please use SHA1 or SHA256"))
 	}
 
 	// If we were given a full metadata file, read it in and use it to create the object. Otherwise, construct a minimal
 	// object metadata file based on the other input paramaters.
 	var objectMeta common.MetaData
 	if objMetadataFile != "" {
-		metaBytes := cliconfig.ReadJsonFileWithLocalConfig(objMetadataFile)
+		metaBytes, err := cliconfig.ReadJsonFileWithLocalConfig(objMetadataFile)
+		if err != nil {
+			return err
+		}
 		if err := json.Unmarshal(metaBytes, &objectMeta); err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal definition file %s: %v", objMetadataFile, err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal definition file %s: %v", objMetadataFile, err))
 		}
 	} else {
 		objectMeta.ObjectID = objId
@@ -348,7 +371,7 @@ func ObjectPublish(org string, userPw string, objType string, objId string, objP
 
 		// Create public key. Sign data. Set "hashAlgorithm", "publicKey" and "signature" field
 		if publicKey, signature, err := signObjData(objFile, hashAlgorithm, dsHash, privKeyFilePath); err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("failed to digital sign the file %v, Error: %v", objFile, err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("failed to digital sign the file %v, Error: %v", objFile, err))
 		} else {
 			objectMeta.HashAlgorithm = hashAlgorithm
 			objectMeta.PublicKey = publicKey
@@ -368,14 +391,16 @@ func ObjectPublish(org string, userPw string, objType string, objId string, objP
 
 	// Call the MMS service over HTTP to add the object's metadata to the MMS.
 	urlPath := path.Join("api/v1/objects/", org, objectMeta.ObjectType, objectMeta.ObjectID)
-	cliutils.ExchangePutPost("Model Management Service", http.MethodPut, cliutils.GetMMSUrl(), urlPath, cliutils.OrgAndCreds(org, userPw), []int{204}, wrapper, nil)
+	if _, err := mmsHandler.Put(urlPath, cliutils.OrgAndCreds(org, userPw), wrapper, nil); err != nil {
+		return err
+	}
 
 	// The object's data might be quite large, so upload it in a second call that will stream the file contents
 	// to the MSS (CSS).
 	if objFile != "" {
 		file, err := os.Open(objFile)
 		if err != nil {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("unable to open object file %v: %v", objFile, err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("unable to open object file %v: %v", objFile, err))
 		}
 		defer file.Close()
 
@@ -388,7 +413,9 @@ func ObjectPublish(org string, userPw string, objType string, objId string, objP
 
 		// Stream the file to the MMS (CSS).
 		urlPath = path.Join("api/v1/objects/", org, objectMeta.ObjectType, objectMeta.ObjectID, "data")
-		cliutils.ExchangePutPost("Model Management Service", http.MethodPut, cliutils.GetMMSUrl(), urlPath, cliutils.OrgAndCreds(org, userPw), []int{204}, file, nil)
+		if _, err := mmsHandler.Put(urlPath, cliutils.OrgAndCreds(org, userPw), file, nil); err != nil {
+			return err
+		}
 
 		// Restore HTTP request override if necessary.
 		if setHTTPOverride {
@@ -401,21 +428,24 @@ func ObjectPublish(org string, userPw string, objType string, objId string, objP
 	// Grab the object status and display it.
 	urlPath = path.Join("api/v1/objects/", org, objectMeta.ObjectType, objectMeta.ObjectID, "status")
 	var resp []byte
-	cliutils.ExchangeGet("Model Management Service", cliutils.GetMMSUrl(), urlPath, cliutils.OrgAndCreds(org, userPw), []int{200}, &resp)
+	if _, err := mmsHandler.Get(urlPath, cliutils.OrgAndCreds(org, userPw), &resp); err != nil {
+		return err
+	}
 	cliutils.Verbose(msgPrinter.Sprintf("Object status: %v", string(resp)))
 
 	msgPrinter.Printf("Object %v added to org %v in the Model Management Service", objectMeta.ObjectID, org)
 	msgPrinter.Println()
 
+	return nil
 }
 
 // Delete an object in the MMS.
-func ObjectDelete(org string, userPw string, objType string, objId string) {
+func ObjectDelete(org string, userPw string, objType string, objId string, mmsHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	if userPw == "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify exchange credentials to access the model management service"))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify exchange credentials to access the model management service"))
 	}
 
 	// For this command, object type and id are required parameters, No null checking is needed.
@@ -425,14 +455,16 @@ func ObjectDelete(org string, userPw string, objType string, objId string) {
 
 	// Call the MMS service over HTTP to delete the object.
 	urlPath := path.Join("api/v1/objects/", org, objType, objId)
-	httpCode := cliutils.ExchangeDelete("Model Management Service", cliutils.GetMMSUrl(), urlPath, cliutils.OrgAndCreds(org, userPw), []int{204, 404})
-	if httpCode == 404 {
-		cliutils.Fatal(cliutils.NOT_FOUND, msgPrinter.Sprintf("object '%s' of type '%s' not found in org %s", objId, objType, org))
+	if httpCode, err := mmsHandler.Delete(urlPath, cliutils.OrgAndCreds(org, userPw)); err != nil {
+		return err
+	} else if httpCode == 404 {
+		return cliutils.CLIError{StatusCode: cliutils.NOT_FOUND, msgPrinter.Sprintf("object '%s' of type '%s' not found in org %s", objId, objType, org))
 	}
 
 	msgPrinter.Printf("Object %v deleted from org %v in the Model Management Service", objId, org)
 	msgPrinter.Println()
 
+	return nil
 }
 
 func dpServiceIsValid(dpService string) bool {
@@ -502,7 +534,9 @@ func signObjData(objFile string, dsHashAlgo string, dsHash string, privKeyFilePa
 
 	// use given key pair, if given, otherwise try to fetch default key file
 	privKeyFilePath_tmp := cliutils.WithDefaultEnvVar(&privKeyFilePath, "HZN_PRIVATE_KEY_FILE")
-	privKeyFilePath = cliutils.WithDefaultKeyFile(*privKeyFilePath_tmp, false)
+	if privKeyFilePath, err = cliutils.WithDefaultKeyFile(*privKeyFilePath_tmp, false); err != nil {
+		return "", "", err
+	}
 	if privKeyFilePath != "" {
 		if privateKey, err = sign.ReadPrivateKey(privKeyFilePath); err != nil {
 			return "", "", err

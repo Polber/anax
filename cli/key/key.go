@@ -27,7 +27,7 @@ type KeyList struct {
 	Pem []string `json:"pem"`
 }
 
-func List(keyName string, listAll bool) {
+func List(keyName string, listAll bool) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -36,7 +36,7 @@ func List(keyName string, listAll bool) {
 		cliutils.HorizonGet("trust", []int{200}, &apiOutput, false)
 		jsonBytes, err := json.MarshalIndent(apiOutput.Pem, "", cliutils.JSON_INDENT)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'key list' output: %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'key list' output: %v", err))
 		}
 		fmt.Printf("%s\n", jsonBytes)
 	} else if keyName == "" {
@@ -49,7 +49,7 @@ func List(keyName string, listAll bool) {
 		var output []api.KeyPairSimpleRecord
 		var ok bool
 		if output, ok = apiOutput["pem"]; !ok {
-			cliutils.Fatal(cliutils.HTTP_ERROR, msgPrinter.Sprintf("horizon api trust output did not include 'pem' key"))
+			return cliutils.CLIError{StatusCode: cliutils.HTTP_ERROR, msgPrinter.Sprintf("horizon api trust output did not include 'pem' key"))
 		}
 
 		certsSimpleOutput := []KeyPairSimpleOutput{}
@@ -66,7 +66,7 @@ func List(keyName string, listAll bool) {
 
 		jsonBytes, err := json.MarshalIndent(certsSimpleOutput, "", cliutils.JSON_INDENT)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'key list' output: %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'key list' output: %v", err))
 		}
 		fmt.Printf("%s\n", jsonBytes)
 	} else {
@@ -75,10 +75,12 @@ func List(keyName string, listAll bool) {
 		cliutils.HorizonGet("trust/"+keyName, []int{200}, &apiOutput, false)
 		fmt.Printf("%s", apiOutput)
 	}
+
+	return nil
 }
 
 // Create generates a private/public key pair
-func Create(x509Org, x509CN, outputDir string, keyLength, daysValid int, importKey bool, privKeyFile string, pubKeyFile string, overwrite bool) {
+func Create(x509Org, x509CN, outputDir string, keyLength, daysValid int, importKey bool, privKeyFile string, pubKeyFile string, overwrite bool) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -89,7 +91,7 @@ func Create(x509Org, x509CN, outputDir string, keyLength, daysValid int, importK
 	msgPrinter.Println()
 	newKeys, err := generatekeys.Write(genDir, keyLength, x509CN, x509Org, time.Now().AddDate(0, 0, daysValid))
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("failed to create a new key pair: %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("failed to create a new key pair: %v", err))
 	}
 
 	// the created names are randomly generated, need to move them to the files if they are specified in the input
@@ -106,11 +108,11 @@ func Create(x509Org, x509CN, outputDir string, keyLength, daysValid int, importK
 	if outputDir == "" {
 		cliutils.Verbose(msgPrinter.Sprintf("Move private key file from %v to %v", privKeyName, privKeyFile))
 		if err := os.Rename(privKeyName, privKeyFile); err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("failed to move private key file from %v to %v. %v", privKeyName, privKeyFile, err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("failed to move private key file from %v to %v. %v", privKeyName, privKeyFile, err))
 		}
 		cliutils.Verbose(msgPrinter.Sprintf("Move public key file from %v to %v.", pubKeyName, pubKeyFile))
 		if err := os.Rename(pubKeyName, pubKeyFile); err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("failed to move public key file from %v to %v. %v", pubKeyName, pubKeyFile, err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("failed to move public key file from %v to %v. %v", pubKeyName, pubKeyFile, err))
 		}
 	} else {
 		privKeyFile = privKeyName
@@ -121,31 +123,43 @@ func Create(x509Org, x509CN, outputDir string, keyLength, daysValid int, importK
 	// Import the key to anax if they requested that
 	if importKey {
 		if pubKeyFile == "" {
-			cliutils.Fatal(cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("asked to import the created public key, but can not determine the name."))
+			return cliutils.CLIError{StatusCode: cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("asked to import the created public key, but can not determine the name."))
 		}
 		cliutils.Verbose(msgPrinter.Sprintf("Importing public key file %v to the Horizon agent.", pubKeyFile))
 		Import(pubKeyFile)
 		msgPrinter.Printf("%s imported to the Horizon agent", pubKeyFile)
 		msgPrinter.Println()
 	}
+
+	return nil
 }
 
-func Import(pubKeyFile string) {
+func Import(pubKeyFile string) error {
 	//take default key if empty, make sure the key exists
-	pubKeyFile = cliutils.VerifySigningKeyInput(pubKeyFile, true)
+	var err error
+	if pubKeyFile, err = cliutils.VerifySigningKeyInput(pubKeyFile, true); err != nil {
+		return err
+	}
 
-	bodyBytes := cliutils.ReadFile(pubKeyFile)
+	bodyBytes, err := cliutils.ReadFile(pubKeyFile)
+	if err != nil {
+		return err
+	}
 	baseName := filepath.Base(pubKeyFile)
 	cliutils.HorizonPutPost(http.MethodPut, "trust/"+baseName, []int{201, 200}, bodyBytes, true)
+
+	return nil
 }
 
-func Remove(keyName string) {
+func Remove(keyName string) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	cliutils.HorizonDelete("trust/"+keyName, []int{200, 204}, []int{}, false)
 	msgPrinter.Printf("Public key '%s' removed from the Horizon agent.", keyName)
 	msgPrinter.Println()
+
+	return nil
 }
 
 // verify the inputs, prompt for overwrite if files exist, create direcories if not exist.
@@ -155,7 +169,7 @@ func verifyAndPrepareKeyCreateInput(outputDir string, privKeyFile string, pubKey
 
 	if outputDir != "" {
 		if privKeyFile != "" || pubKeyFile != "" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("-d is mutually exclusive with -k and -K"))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("-d is mutually exclusive with -k and -K"))
 		}
 	} else {
 		var err error
@@ -163,12 +177,12 @@ func verifyAndPrepareKeyCreateInput(outputDir string, privKeyFile string, pubKey
 		// get default file names if input is empty
 		if privKeyFile == "" {
 			if privKeyFile, err = cliutils.GetDefaultSigningKeyFile(false); err != nil {
-				cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, err.Error())
+				return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, err.Error())
 			}
 		}
 		if pubKeyFile == "" {
 			if pubKeyFile, err = cliutils.GetDefaultSigningKeyFile(true); err != nil {
-				cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, err.Error())
+				return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, err.Error())
 			}
 		}
 
@@ -177,13 +191,13 @@ func verifyAndPrepareKeyCreateInput(outputDir string, privKeyFile string, pubKey
 			// assign the value to a temporary variable for output string because the gloabalization does not take same string with different arguments.
 			kFileName := privKeyFile
 
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Failed to get absolute path for file %v. %v", kFileName, err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Failed to get absolute path for file %v. %v", kFileName, err))
 		}
 		if pubKeyFile, err = filepath.Abs(pubKeyFile); err != nil {
 			// assign the value to a temporary variable for output string because the gloabalization does not take same string with different arguments.
 			kFileName := pubKeyFile
 
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Failed to get absolute path for file %v. %v", kFileName, err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Failed to get absolute path for file %v. %v", kFileName, err))
 		}
 
 		// confirm overwrite
@@ -196,7 +210,7 @@ func verifyAndPrepareKeyCreateInput(outputDir string, privKeyFile string, pubKey
 			if _, err := os.Stat(outputDirPub); os.IsNotExist(err) {
 				cliutils.Verbose(msgPrinter.Sprintf("Creating directory %v.", outputDirPub))
 				if err := os.MkdirAll(outputDirPub, os.ModePerm); err != nil {
-					cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, err.Error())
+					return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, err.Error())
 				}
 			}
 		}
@@ -206,7 +220,7 @@ func verifyAndPrepareKeyCreateInput(outputDir string, privKeyFile string, pubKey
 	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
 		cliutils.Verbose(msgPrinter.Sprintf("Creating directory %v.", outputDir))
 		if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, err.Error())
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, err.Error())
 		}
 	}
 
@@ -223,13 +237,13 @@ func confirmOverwrite(privKeyFile string, pubKeyFile string, overwrite bool) {
 	pubExists := false
 	if fi, err := os.Stat(privKeyFile); err == nil {
 		if fi.Mode().IsDir() {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("%v is a directory. Please specify a file name.", privKeyFile))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("%v is a directory. Please specify a file name.", privKeyFile))
 		}
 		priveExists = true
 	}
 	if fi, err := os.Stat(pubKeyFile); err == nil {
 		if fi.Mode().IsDir() {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("%v is a directory. Please specify a file name.", pubKeyFile))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("%v is a directory. Please specify a file name.", pubKeyFile))
 		}
 		pubExists = true
 	}
@@ -251,13 +265,13 @@ func confirmOverwrite(privKeyFile string, pubKeyFile string, overwrite bool) {
 	if priveExists {
 		cliutils.Verbose(msgPrinter.Sprintf("Deleting file %v.", privKeyFile))
 		if err := os.Remove(privKeyFile); err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, err.Error())
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, err.Error())
 		}
 	}
 	if pubExists {
 		cliutils.Verbose(msgPrinter.Sprintf("Deleting file %v.", pubKeyFile))
 		if err := os.Remove(pubKeyFile); err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, err.Error())
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, err.Error())
 		}
 	}
 }

@@ -27,14 +27,14 @@ const SERVICE_LOG_COMMAND = "log"
 const SERVICE_NEW_DEFAULT_VERSION = "0.0.1"
 
 // Create skeletal horizon metadata files to establish a new service project.
-func ServiceNew(homeDirectory string, org string, specRef string, version string, images []string, noImageGen bool, dconfig []string, noPattern bool, noPolicy bool) {
+func ServiceNew(homeDirectory string, org string, specRef string, version string, images []string, noImageGen bool, dconfig []string, noPattern bool, noPolicy bool) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// validate the parameters
 	dir, err := verifyNewServiceInputs(homeDirectory, org, specRef, version, images, noImageGen, dconfig, noPattern)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
 	}
 
 	// fill unspecified parameters witht the default
@@ -43,7 +43,7 @@ func ServiceNew(homeDirectory string, org string, specRef string, version string
 		if specRef == "" {
 			specRef1, version1, err := GetServiceSpecFromImage(images[0])
 			if err != nil {
-				cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' Failed to get the service name from the image name. %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err))
+				return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' Failed to get the service name from the image name. %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err))
 			} else {
 				specRef = specRef1
 			}
@@ -59,7 +59,7 @@ func ServiceNew(homeDirectory string, org string, specRef string, version string
 
 	// Create the working directory.
 	if err := CreateWorkingDir(dir); err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
 	}
 
 	// If there are any horizon metadata files already in the directory then we wont create any files.
@@ -76,46 +76,46 @@ func ServiceNew(homeDirectory string, org string, specRef string, version string
 
 	imageInfo, image_base, err := GetImageInfoFromImageList(images, version, noImageGen)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
 	}
 
 	// create env var file
 	cliutils.Verbose(msgPrinter.Sprintf("Creating config file for environmental variables: %v/%v", dir, HZNENV_FILE))
 	err = CreateHznEnvFile(dir, org, specRef, version, image_base)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
 	}
 
 	// Create the metadata files.
 	cliutils.Verbose(msgPrinter.Sprintf("Creating user input file: %v/%v", dir, USERINPUT_FILE))
 	err = CreateUserInputs(dir, specRef)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
 	}
 
 	cliutils.Verbose(msgPrinter.Sprintf("Creating secrets file: %v/%v", dir, SECRETS_FILE))
 	err = CreateSecretsFile(dir)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
 	}
 
 	cliutils.Verbose(msgPrinter.Sprintf("Creating service definition file: %v/%v", dir, SERVICE_DEFINITION_FILE))
 	err = CreateServiceDefinition(dir, specRef, imageInfo, noImageGen, dconfig)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
 	}
 
 	if !noPattern {
 		cliutils.Verbose(msgPrinter.Sprintf("Creating pattern definition file: %v/%v", dir, PATTERN_DEFINITION_FILE))
 		err = CreatePatternDefinition(dir)
 		if err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
 		}
 		if cutil.SliceContains(dconfig, "native") {
 			cliutils.Verbose(msgPrinter.Sprintf("Creating pattern definition file: %v/%v", dir, PATTERN_DEFINITION_ALL_ARCHES_FILE))
 			err = CreatePatternDefinitionAllArches(dir)
 			if err != nil {
-				cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
+				return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
 			}
 		}
 	}
@@ -125,7 +125,7 @@ func ServiceNew(homeDirectory string, org string, specRef string, version string
 		cliutils.Verbose(msgPrinter.Sprintf("Creating service policy file: %v/%v", dir, SERVICE_POLICY_FILE))
 		err = CreateServicePolicy(dir)
 		if err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
 		}
 	}
 
@@ -133,17 +133,17 @@ func ServiceNew(homeDirectory string, org string, specRef string, version string
 	cliutils.Verbose(msgPrinter.Sprintf("Creating .gitignore files for source code management."))
 	err = CreateSourceCodeManagementFiles(dir)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
 	}
 
 	// create the image related files under current direcotry.
 	if !noImageGen && specRef != "" && cutil.SliceContains(dconfig, "native") {
 		if current_dir, err := os.Getwd(); err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
 		} else {
 			cliutils.Verbose(msgPrinter.Sprintf("Creating image generation files under %v directory.", current_dir))
 			if err := CreateServiceImageFiles(current_dir, dir); err != nil {
-				cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
+				return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_CREATION_COMMAND, err)
 			} else {
 				msgPrinter.Printf("Created image generation files in %v and horizon metadata files in %v. Edit these files to define and configure your new %v.", current_dir, dir, SERVICE_COMMAND)
 				msgPrinter.Println()
@@ -153,6 +153,8 @@ func ServiceNew(homeDirectory string, org string, specRef string, version string
 		msgPrinter.Printf("Created horizon metadata files in %v. Edit these files to define and configure your new %v.", dir, SERVICE_COMMAND)
 		msgPrinter.Println()
 	}
+
+	return nil
 }
 
 // verify the input parameter for the 'hzn service new' command.
@@ -213,58 +215,60 @@ func mapSecNameToSecPath(secretPaths []string) map[string]string {
 	finalMap := make(map[string]string, len(secretPaths))
 	for _, secPath := range secretPaths {
 		if _, err := os.Stat(secPath); err != nil {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Error verifying filepath %v: %v", secPath, err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Error verifying filepath %v: %v", secPath, err))
 		}
 		finalMap[filepath.Base(secPath)] = secPath
 	}
 	return finalMap
 }
 
-func ServiceStartTest(homeDirectory string, userInputFile string, configFiles []string, configType string, noFSS bool, userCreds string, secretsFilePaths []string) {
+func ServiceStartTest(homeDirectory string, userInputFile string, configFiles []string, configType string, noFSS bool, userCreds string, secretsFilePaths []string, exchangeHandler cliutils.ServiceHandler) error {
 	secretsFilePathsMap := mapSecNameToSecPath(secretsFilePaths)
 
 	// Allow the right plugin to start a test of this service.
-	startErr := plugin_registry.DeploymentConfigPlugins.StartTest(homeDirectory, userInputFile, configFiles, configType, noFSS, userCreds, secretsFilePathsMap)
+	startErr := plugin_registry.DeploymentConfigPlugins.StartTest(homeDirectory, userInputFile, configFiles, configType, noFSS, userCreds, secretsFilePathsMap, exchangeHandler)
 	if startErr != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "%v", startErr)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "%v", startErr)
 	}
 
+	return nil
 }
 
 // Services are stopped in the reverse order they were started, parents first and then leaf nodes last in order
 // to minimize the possibility of a parent throwing an error during execution because a leaf node is gone.
-func ServiceStopTest(homeDirectory string) {
+func ServiceStopTest(homeDirectory string) error {
 
 	// Allow the right plugin to stop a test of this service.
 	stopErr := plugin_registry.DeploymentConfigPlugins.StopTest(homeDirectory)
 	if stopErr != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "%v", stopErr)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "%v", stopErr)
 	}
 
+	return nil
 }
 
-func ServiceValidate(homeDirectory string, userInputFile string, configFiles []string, configType string, userCreds string) []string {
+func ServiceValidate(homeDirectory string, userInputFile string, configFiles []string, configType string, userCreds string, exchangeHandler cliutils.ServiceHandler) ([]string, error) {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// Get the setup info and context for running the command.
 	dir, err := setup(homeDirectory, true, false, "")
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_VERIFY_COMMAND, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_VERIFY_COMMAND, err)
 	}
 
 	if err := AbstractServiceValidation(dir); err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_VERIFY_COMMAND, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_VERIFY_COMMAND, err)
 	}
 
-	CommonProjectValidation(dir, userInputFile, SERVICE_COMMAND, SERVICE_VERIFY_COMMAND, userCreds, true)
+	CommonProjectValidation(dir, userInputFile, SERVICE_COMMAND, SERVICE_VERIFY_COMMAND, userCreds, true, exchangeHandler)
 
-	absFiles := FileValidation(configFiles, configType, SERVICE_COMMAND, SERVICE_VERIFY_COMMAND)
+	FileValidation(configFiles, configType, SERVICE_COMMAND, SERVICE_VERIFY_COMMAND)
 
 	msgPrinter.Printf("Service project %v verified.", dir)
 	msgPrinter.Println()
 
-	return absFiles
+	return nil, nil
 }
 
 func searchDependencies(dir string, serviceDef *common.ServiceFile, targetService string) (*common.ServiceFile, error) {
@@ -296,7 +300,7 @@ func searchDependencies(dir string, serviceDef *common.ServiceFile, targetServic
 
 }
 
-func ServiceLog(homeDirectory string, serviceName string, containerName string, tailing bool) {
+func ServiceLog(homeDirectory string, serviceName string, containerName string, tailing bool) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -306,7 +310,7 @@ func ServiceLog(homeDirectory string, serviceName string, containerName string, 
 	// Get the service definition for this project.
 	serviceDef, wderr := GetServiceDefinition(dir, SERVICE_DEFINITION_FILE)
 	if wderr != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_LOG_COMMAND, wderr)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_LOG_COMMAND, wderr)
 	}
 
 	targetServiceDef := serviceDef
@@ -314,14 +318,14 @@ func ServiceLog(homeDirectory string, serviceName string, containerName string, 
 		// Search for the specified service URL
 		foundServiceDef, sderr := searchDependencies(dir, serviceDef, serviceName)
 		if sderr != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_LOG_COMMAND, sderr)
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_LOG_COMMAND, sderr)
 		}
 
 		// Service URL not found
 		if foundServiceDef == nil {
 			err := errors.New(i18n.GetMessagePrinter().Sprintf("failed to find the service %v in the current project. If this is a new dependent "+
 				"service, please update the dependency list with the 'hzn dev dependency fetch' command.", serviceName))
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_LOG_COMMAND, err)
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_LOG_COMMAND, err)
 		} else {
 			targetServiceDef = foundServiceDef
 		}
@@ -333,7 +337,7 @@ func ServiceLog(homeDirectory string, serviceName string, containerName string, 
 	// if it is managed by an agreement.
 	dc, _, cerr := targetServiceDef.ConvertToDeploymentDescription(true, msgPrinter)
 	if cerr != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_LOG_COMMAND, cerr)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", SERVICE_COMMAND, SERVICE_LOG_COMMAND, cerr)
 	}
 
 	// find the log driver for the container (default syslog)
@@ -345,7 +349,7 @@ func ServiceLog(homeDirectory string, serviceName string, containerName string, 
 		for name, _ := range dc.Services {
 			containerNames = append(containerNames, name)
 		}
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' More than one container has been found for deployment: %v. Please specify the service name by -c flag", SERVICE_COMMAND, SERVICE_LOG_COMMAND, strings.Join(containerNames, ", ")))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' More than one container has been found for deployment: %v. Please specify the service name by -c flag", SERVICE_COMMAND, SERVICE_LOG_COMMAND, strings.Join(containerNames, ", ")))
 	} else if containerName != "" {
 		found := false
 		for name, svc := range dc.Services {
@@ -355,7 +359,7 @@ func ServiceLog(homeDirectory string, serviceName string, containerName string, 
 			}
 		}
 		if !found {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v': container %v not found in service %v", SERVICE_COMMAND, SERVICE_LOG_COMMAND, containerName, serviceName))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v': container %v not found in service %v", SERVICE_COMMAND, SERVICE_LOG_COMMAND, containerName, serviceName))
 		}
 	} else { // containerName == "" && len(dc.Services) == 1
 		for name, svc := range dc.Services {
@@ -370,7 +374,7 @@ func ServiceLog(homeDirectory string, serviceName string, containerName string, 
 	// Locate the dev container(s) and show logs
 	containers, err := findContainers(containerName, "", cw)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' Unable to list containers: %v", SERVICE_COMMAND, SERVICE_LOG_COMMAND), err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' Unable to list containers: %v", SERVICE_COMMAND, SERVICE_LOG_COMMAND), err)
 	}
 	cliutils.Verbose(msgPrinter.Sprintf("Found containers %v", containers))
 
@@ -380,7 +384,7 @@ func ServiceLog(homeDirectory string, serviceName string, containerName string, 
 
 			nonDefaultLogDriverUsed := false
 			if nonDefaultLogDriverUsed, err = cliutils.ChekServiceLogPossibility(logDriver); err != nil {
-				cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to display log messages: %v", err))
+				return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to display log messages: %v", err))
 			}
 
 			msgPrinter.Printf("Displaying log messages for dev service %v with instance id prefix %v.", serviceName, msId)
@@ -395,9 +399,11 @@ func ServiceLog(homeDirectory string, serviceName string, containerName string, 
 			} else {
 				cliutils.LogLinux(strings.ToLower(msId)+"_"+containerName, tailing)
 			}
-			return
+			return nil
 		}
 	}
 
-	cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' Cannot find any running container for dev service %s", SERVICE_COMMAND, SERVICE_LOG_COMMAND, serviceName))
+	return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' Cannot find any running container for dev service %s", SERVICE_COMMAND, SERVICE_LOG_COMMAND, serviceName))
+
+	return nil
 }

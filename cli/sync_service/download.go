@@ -11,18 +11,19 @@ import (
 	"github.com/open-horizon/anax/i18n"
 	"github.com/open-horizon/edge-sync-service/common"
 	"io"
+	"net/http"
 	"os"
 	"path"
 	"strings"
 )
 
 // ObjectDownLoad is to download data to a file named ${objectType}_${objectId}
-func ObjectDownLoad(org string, userPw string, objType string, objId string, filePath string, overwrite bool, skipDigitalSigVerify bool) {
+func ObjectDownLoad(org string, userPw string, objType string, objId string, filePath string, overwrite bool, skipDigitalSigVerify bool, mmsHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	if userPw == "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify exchange credentials to access the model management service"))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("must specify exchange credentials to access the model management service"))
 	}
 
 	// For this command, object type and id are required parameters, No null checking is needed.
@@ -39,21 +40,29 @@ func ObjectDownLoad(org string, userPw string, objType string, objId string, fil
 	// Call the MMS service over HTTP to get object metadata and determine the file size.
 	var objectMeta common.MetaData
 	metaUrlPath := path.Join("api/v1/objects/", org, objType, objId)
-	httpCode := cliutils.ExchangeGet("Model Management Service", cliutils.GetMMSUrl(), metaUrlPath, cliutils.OrgAndCreds(org, userPw), []int{200, 404}, &objectMeta)
+	httpCode, err := mmsHandler.Get(metaUrlPath, cliutils.OrgAndCreds(org, userPw), &objectMeta)
+	if err != nil {
+		return err
+	}
 	if httpCode == 404 {
-		cliutils.Fatal(cliutils.NOT_FOUND, msgPrinter.Sprintf("object '%s' of type '%s' not found in org %s", objId, objType, org))
+		return cliutils.CLIError{StatusCode: cliutils.NOT_FOUND, msgPrinter.Sprintf("object '%s' of type '%s' not found in org %s", objId, objType, org))
 	}
 	size := objectMeta.ObjectSize
 
 	// Call the MMS service over HTTP to download the object data.
 	var data io.Reader
+	var resp *http.Response
 	urlPath := path.Join("api/v1/objects/", org, objType, objId, "/data")
-	resp := cliutils.ExchangeGetResponse("Model Management Service", cliutils.GetMMSUrl(), urlPath, cliutils.OrgAndCreds(org, userPw))
+	if mmsUrl, err := cliutils.GetMMSUrl(); err != nil {
+		return err
+	} else if resp, err = cliutils.ExchangeGetResponse("Model Management Service", mmsUrl, urlPath, cliutils.OrgAndCreds(org, userPw)); err != nil {
+		return err
+	}
 	if resp.Body != nil {
 		defer resp.Body.Close()
 	}
 	if resp.StatusCode == 404 {
-		cliutils.Fatal(cliutils.NOT_FOUND, msgPrinter.Sprintf("object '%s' of type '%s' not found in org %s", objId, objType, org))
+		return cliutils.CLIError{StatusCode: cliutils.NOT_FOUND, msgPrinter.Sprintf("object '%s' of type '%s' not found in org %s", objId, objType, org))
 	}
 
 	// Display download progress on console
@@ -99,12 +108,11 @@ func ObjectDownLoad(org string, userPw string, objType string, objId string, fil
 
 	if !overwrite {
 		if _, err := os.Stat(fileName); err == nil {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("File %s already exists. Please specify a different file path or file name. To overwrite the existing file, use the '--overwrite' flag.", fileName))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("File %s already exists. Please specify a different file path or file name. To overwrite the existing file, use the '--overwrite' flag.", fileName))
 		}
 	}
 
 	var verified bool
-	var err error
 	if !skipDigitalSigVerify {
 		if objectMeta.HashAlgorithm != "" && objectMeta.PublicKey != "" && objectMeta.Signature != "" {
 			// verify data
@@ -112,7 +120,7 @@ func ObjectDownLoad(org string, userPw string, objType string, objId string, fil
 			msgPrinter.Printf("Verifying data with digital signature....")
 			msgPrinter.Println()
 			if verified, err = VerifyDataSig(data, objectMeta.PublicKey, objectMeta.Signature, objectMeta.HashAlgorithm, fileName); !verified {
-				cliutils.Fatal(cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("Failed to verify data: %s", err.Error()))
+				return cliutils.CLIError{StatusCode: cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("Failed to verify data: %s", err.Error()))
 			}
 			msgPrinter.Printf("Verifying digital signature is done.")
 			msgPrinter.Println()
@@ -126,13 +134,14 @@ func ObjectDownLoad(org string, userPw string, objType string, objId string, fil
 		// or
 		// 2) object metadata doesn't have HashAlgorithm, or publicKey or signature field
 		if err := writeDateStreamToFile(data, fileName); err != nil {
-			cliutils.Fatal(cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("Failed to save data for object '%s' of type '%s' to file %s, err: %v", objId, objType, fileName, err))
+			return cliutils.CLIError{StatusCode: cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("Failed to save data for object '%s' of type '%s' to file %s, err: %v", objId, objType, fileName, err))
 		}
 	}
 
 	msgPrinter.Printf("Data of object %v saved to file %v", objId, fileName)
 	msgPrinter.Println()
 
+	return nil
 }
 
 func VerifyDataSig(dataReader io.Reader, publicKey string, signature string, hashAlgo string, fileName string) (bool, error) {

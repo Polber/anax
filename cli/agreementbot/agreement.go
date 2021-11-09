@@ -64,13 +64,14 @@ func NewArchivedAgreement(agreement agbot.Agreement) *ArchivedAgreement {
 	return &a
 }
 
-func getAgreements(archivedAgreements bool) (apiAgreements []agbot.Agreement) {
+func getAgreements(archivedAgreements bool) (apiAgreements []agbot.Agreement, retErr error) {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// set env to call agbot url
 	if err := os.Setenv("HORIZON_URL", cliutils.GetAgbotUrlBase()); err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("unable to set env var 'HORIZON_URL', error %v", err))
+		retErr = cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, Message: msgPrinter.Sprintf("unable to set env var 'HORIZON_URL', error %v", err)}
+		return
 	}
 
 	// Get horizon api agreement output and drill down to the category we want
@@ -79,23 +80,27 @@ func getAgreements(archivedAgreements bool) (apiAgreements []agbot.Agreement) {
 
 	var ok bool
 	if _, ok = apiOutput["agreements"]; !ok {
-		cliutils.Fatal(cliutils.HTTP_ERROR, msgPrinter.Sprintf("horizon api agreement output did not include 'agreements' key"))
+		retErr = cliutils.CLIError{StatusCode: cliutils.HTTP_ERROR, Message: msgPrinter.Sprintf("horizon api agreement output did not include 'agreements' key")}
+		return
 	}
 	whichAgreements := "active"
 	if archivedAgreements {
 		whichAgreements = "archived"
 	}
 	if apiAgreements, ok = apiOutput["agreements"][whichAgreements]; !ok {
-		cliutils.Fatal(cliutils.HTTP_ERROR, msgPrinter.Sprintf("horizon api agreement output did not include '%s' key", whichAgreements))
+		retErr = cliutils.CLIError{StatusCode: cliutils.HTTP_ERROR, Message: msgPrinter.Sprintf("horizon api agreement output did not include '%s' key", whichAgreements)}
 	}
 	return
 }
 
-func AgreementList(archivedAgreements bool, agreement string) {
+func AgreementList(archivedAgreements bool, agreement string) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
-	apiAgreements := getAgreements(archivedAgreements)
+	apiAgreements, err := getAgreements(archivedAgreements)
+	if err != nil {
+		return err
+	}
 
 	if agreement != "" {
 		// Look for our agreement id. This works for either active or archived
@@ -104,14 +109,14 @@ func AgreementList(archivedAgreements bool, agreement string) {
 				// Found it
 				jsonBytes, err := json.MarshalIndent(apiAgreements[i], "", cliutils.JSON_INDENT)
 				if err != nil {
-					cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal agreement with index %d: %v", i, err))
+					return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal agreement with index %d: %v", i, err)}
 				}
 				fmt.Printf("%s\n", jsonBytes)
-				return
+				return nil
 			}
 		}
 		// Did not find it
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("agreement id %s not found", agreement))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, Message: msgPrinter.Sprintf("agreement id %s not found", agreement)}
 	} else {
 		// Go thru the apiAgreements and convert into our output struct and then print
 		if !archivedAgreements {
@@ -121,7 +126,7 @@ func AgreementList(archivedAgreements bool, agreement string) {
 			}
 			jsonBytes, err := json.MarshalIndent(agreements, "", cliutils.JSON_INDENT)
 			if err != nil {
-				cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'agreement list' output: %v", err))
+				return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal 'agreement list' output: %v", err)}
 			}
 			fmt.Printf("%s\n", jsonBytes)
 		} else {
@@ -131,21 +136,26 @@ func AgreementList(archivedAgreements bool, agreement string) {
 			}
 			jsonBytes, err := json.MarshalIndent(agreements, "", cliutils.JSON_INDENT)
 			if err != nil {
-				cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'agreement list' output: %v", err))
+				return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal 'agreement list' output: %v", err)}
 			}
 			fmt.Printf("%s\n", jsonBytes)
 		}
 	}
+
+	return nil
 }
 
-func AgreementCancel(agreementId string, allAgreements bool) {
+func AgreementCancel(agreementId string, allAgreements bool) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// Put the agreement ids in a slice
 	var agrIds []string
 	if allAgreements {
-		apiAgreements := getAgreements(false)
+		apiAgreements, err := getAgreements(false)
+		if err != nil {
+			return err
+		}
 		for _, a := range apiAgreements {
 			agrIds = append(agrIds, a.CurrentAgreementId)
 		}
@@ -155,19 +165,23 @@ func AgreementCancel(agreementId string, allAgreements bool) {
 		}
 	} else {
 		if agreementId == "" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("either an agreement ID or -a must be specified."))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, Message: msgPrinter.Sprintf("either an agreement ID or -a must be specified.")}
 		}
 		agrIds = append(agrIds, agreementId)
 	}
 
 	// Cancel the agreements
 	if err := os.Setenv("HORIZON_URL", cliutils.GetAgbotUrlBase()); err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("unable to set env var 'HORIZON_URL', error %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, Message: msgPrinter.Sprintf("unable to set env var 'HORIZON_URL', error %v", err)}
 	}
 
 	for _, id := range agrIds {
 		msgPrinter.Printf("Canceling agreement %s ...", id)
 		msgPrinter.Println()
-		cliutils.HorizonDelete("agreement/"+id, []int{200, 204}, []int{}, false)
+		if _, err := cliutils.HorizonDelete("agreement/"+id, []int{200, 204}, []int{}, false); err != nil {
+			return err
+		}
 	}
+
+	return nil
 }

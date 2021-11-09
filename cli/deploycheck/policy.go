@@ -13,29 +13,42 @@ import (
 	"os"
 )
 
-func readNodePolicyFile(filePath string, inputFileStruct *exchangecommon.NodePolicy) {
-	newBytes := cliconfig.ReadJsonFileWithLocalConfig(filePath)
-	err := json.Unmarshal(newBytes, inputFileStruct)
+func readNodePolicyFile(filePath string, inputFileStruct *exchangecommon.NodePolicy) error {
+	newBytes, err := cliconfig.ReadJsonFileWithLocalConfig(filePath)
 	if err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to unmarshal json input file %s: %v", filePath, err))
+		return err
 	}
+	err = json.Unmarshal(newBytes, inputFileStruct)
+	if err != nil {
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, Message: i18n.GetMessagePrinter().Sprintf("failed to unmarshal json input file %s: %v", filePath, err)}
+	}
+
+	return nil
 }
 
-func readServicePolicyFile(filePath string, inputFileStruct *exchangecommon.ServicePolicy) {
-	newBytes := cliconfig.ReadJsonFileWithLocalConfig(filePath)
-	err := json.Unmarshal(newBytes, inputFileStruct)
+func readServicePolicyFile(filePath string, inputFileStruct *exchangecommon.ServicePolicy) error {
+	newBytes, err := cliconfig.ReadJsonFileWithLocalConfig(filePath)
 	if err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to unmarshal json input file %s: %v", filePath, err))
+		return err
 	}
+	err = json.Unmarshal(newBytes, inputFileStruct)
+	if err != nil {
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, Message: i18n.GetMessagePrinter().Sprintf("failed to unmarshal json input file %s: %v", filePath, err)}
+	}
+
+	return nil
 }
 
 // check if the policies are compatible
-func PolicyCompatible(org string, userPw string, nodeId string, nodeArch string, nodeType string, nodePolFile string, businessPolId string, businessPolFile string, servicePolFile string, svcDefFiles []string, checkAllSvcs bool, showDetail bool) {
+func PolicyCompatible(org string, userPw string, nodeId string, nodeArch string, nodeType string, nodePolFile string, businessPolId string, businessPolFile string, servicePolFile string, svcDefFiles []string, checkAllSvcs bool, showDetail bool, exchangeHandler cliutils.ServiceHandler) error {
 
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// check the input and get the defaults
-	userOrg, credToUse, nId, useNodeId, serviceDefs := verifyPolicyCompatibleParameters(org, userPw, nodeId, nodeType, nodePolFile, businessPolId, businessPolFile, servicePolFile, svcDefFiles)
+	userOrg, credToUse, nId, useNodeId, serviceDefs, err := verifyPolicyCompatibleParameters(org, userPw, nodeId, nodeType, nodePolFile, businessPolId, businessPolFile, servicePolFile, svcDefFiles)
+	if err != nil {
+		return err
+	}
 
 	policyCheckInput := compcheck.PolicyCheck{}
 	policyCheckInput.NodeArch = nodeArch
@@ -45,7 +58,9 @@ func PolicyCompatible(org string, userPw string, nodeId string, nodeArch string,
 	bUseLocalNode := false
 	if useNodeId {
 		// add credentials'org to node id if the node id does not have an org
-		nId = cliutils.AddOrg(userOrg, nId)
+		if nId, err = cliutils.AddOrg(userOrg, nId); err != nil {
+			return err
+		}
 		policyCheckInput.NodeId = nId
 	} else if nodePolFile != "" {
 		// read the node policy from file
@@ -60,7 +75,9 @@ func PolicyCompatible(org string, userPw string, nodeId string, nodeArch string,
 
 	if bUseLocalNode {
 		// get id from local node, check arch
-		policyCheckInput.NodeId, policyCheckInput.NodeArch, policyCheckInput.NodeType, _ = getLocalNodeInfo(nodeArch, nodeType, "")
+		if policyCheckInput.NodeId, policyCheckInput.NodeArch, policyCheckInput.NodeType, _, err = getLocalNodeInfo(nodeArch, nodeType, ""); err != nil {
+			return err
+		}
 
 		// get node policy from local node
 		var np exchangecommon.NodePolicy
@@ -73,7 +90,10 @@ func PolicyCompatible(org string, userPw string, nodeId string, nodeArch string,
 	}
 
 	// get business policy
-	bp := getBusinessPolicy(userOrg, credToUse, businessPolId, businessPolFile)
+	bp, err := getBusinessPolicy(userOrg, credToUse, businessPolId, businessPolFile, exchangeHandler)
+	if err != nil {
+		return err
+	}
 	policyCheckInput.BusinessPolicy = bp
 
 	if servicePolFile != "" {
@@ -96,7 +116,10 @@ func PolicyCompatible(org string, userPw string, nodeId string, nodeArch string,
 	cliutils.Verbose(msgPrinter.Sprintf("Using compatibility checking input: %v", policyCheckInput))
 
 	// get exchange context
-	ec := cliutils.GetUserExchangeContext(userOrg, credToUse)
+	ec, err := cliutils.GetUserExchangeContext(userOrg, credToUse)
+	if err != nil {
+		return err
+	}
 
 	// compcheck.PolicyCompatible function calls the exchange package that calls glog.
 	// set glog to log to /dev/null so glog errors will not be printed
@@ -106,7 +129,7 @@ func PolicyCompatible(org string, userPw string, nodeId string, nodeArch string,
 	// the policy validation are done wthin the calling function.
 	compOutput, err := compcheck.PolicyCompatible(ec, &policyCheckInput, checkAllSvcs, msgPrinter)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, err.Error())
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, Message: err.Error()}
 	} else {
 		if !showDetail {
 			compOutput.Input = nil
@@ -115,17 +138,19 @@ func PolicyCompatible(org string, userPw string, nodeId string, nodeArch string,
 		// display the output
 		output, err := cliutils.DisplayAsJson(compOutput)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn deploycheck policy' output: %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal 'hzn deploycheck policy' output: %v", err)}
 		}
 
 		fmt.Println(output)
 	}
+
+	return nil
 }
 
 // make sure -n and --node-pol, -b and -B, pairs are mutually compatible.
 // get default credential, node id and org if they are not set.
 func verifyPolicyCompatibleParameters(org string, userPw string, nodeId string, nodeType string, nodePolFile string,
-	businessPolId string, businessPolFile string, servicePolFile string, svcDefFiles []string) (string, string, string, bool, []common.AbstractServiceFile) {
+	businessPolId string, businessPolFile string, servicePolFile string, svcDefFiles []string) (string, string, string, bool, []common.AbstractServiceFile, error) {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -139,7 +164,7 @@ func verifyPolicyCompatibleParameters(org string, userPw string, nodeId string, 
 			// true means will use exchange call
 			useNodeId = true
 		} else {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("-n and --node-pol are mutually exclusive."))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, Message: msgPrinter.Sprintf("-n and --node-pol are mutually exclusive.")}
 		}
 	} else {
 		if nodePolFile == "" {
@@ -160,11 +185,11 @@ func verifyPolicyCompatibleParameters(org string, userPw string, nodeId string, 
 			// true means will use exchange call
 			useBPolId = true
 		} else {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("-b and -B are mutually exclusive."))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, Message: msgPrinter.Sprintf("-b and -B are mutually exclusive.")}
 		}
 	} else {
 		if businessPolFile == "" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Either -b or -B must be specified."))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, Message: msgPrinter.Sprintf("Either -b or -B must be specified.")}
 		}
 	}
 
@@ -175,30 +200,33 @@ func verifyPolicyCompatibleParameters(org string, userPw string, nodeId string, 
 	}
 
 	if businessPolId != "" && svcDefFiles != nil && len(svcDefFiles) > 0 {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("-b and --service are mutually exclusive."))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, Message: msgPrinter.Sprintf("-b and --service are mutually exclusive.")}
 	}
 
 	useSId, serviceDefs := useExchangeForServiceDef(svcDefFiles)
 
 	// if user credential is not given, then use the node auth env HZN_EXCHANGE_NODE_AUTH if it is defined.
+	var err error
 	credToUse := cliutils.WithDefaultEnvVar(&userPw, "HZN_EXCHANGE_NODE_AUTH")
 	orgToUse := org
 	if useNodeId || useBPolId || useSPolId || useSId {
 		if *credToUse == "" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Please specify the Exchange credential with -u for querying the node, deployment policy, service and service policy."))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, Message: msgPrinter.Sprintf("Please specify the Exchange credential with -u for querying the node, deployment policy, service and service policy.")}
 		} else {
 			// get the org from credToUse
 			if org == "" {
 				id, _ := cliutils.SplitIdToken(*credToUse)
 				if id != "" {
-					orgToUse, _ = cliutils.TrimOrg("", id)
+					if orgToUse, _, err = cliutils.TrimOrg("", id); err != nil {
+						return "", "", "", false, nil, err
+					}
 					if orgToUse == "" {
-						cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Please specify the organization with -o for the Exchange credentials: %v.", *credToUse))
+						return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, Message: msgPrinter.Sprintf("Please specify the organization with -o for the Exchange credentials: %v.", *credToUse)}
 					}
 				}
 			}
 		}
 	}
 
-	return orgToUse, *credToUse, nodeIdToUse, useNodeId, serviceDefs
+	return orgToUse, *credToUse, nodeIdToUse, useNodeId, serviceDefs, nil
 }

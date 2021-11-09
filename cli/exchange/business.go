@@ -14,16 +14,18 @@ import (
 	"github.com/open-horizon/anax/i18n"
 	"github.com/open-horizon/anax/policy"
 	"golang.org/x/text/message"
-	"net/http"
 	"runtime"
 )
 
 //BusinessListPolicy lists all the policies in the org or only the specified policy if one is given
-func BusinessListPolicy(org string, credToUse string, policy string, namesOnly bool) {
+func BusinessListPolicy(org string, credToUse string, policy string, namesOnly bool, exchangeHandler cliutils.ServiceHandler) error {
 	cliutils.SetWhetherUsingApiKey(credToUse)
 
 	var polOrg string
-	polOrg, policy = cliutils.TrimOrg(org, policy)
+	var err error
+	if polOrg, policy, err = cliutils.TrimOrg(org, policy); err != nil {
+		return err
+	}
 
 	if policy == "*" {
 		policy = ""
@@ -34,9 +36,10 @@ func BusinessListPolicy(org string, credToUse string, policy string, namesOnly b
 
 	//get policy list from Horizon Exchange
 	var policyList exchange.GetBusinessPolicyResponse
-	httpCode := cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), "orgs/"+polOrg+"/business/policies"+cliutils.AddSlash(policy), cliutils.OrgAndCreds(org, credToUse), []int{200, 404}, &policyList)
-	if httpCode == 404 && policy != "" {
-		cliutils.Fatal(cliutils.NOT_FOUND, msgPrinter.Sprintf("Policy %s not found in org %s", policy, polOrg))
+	if httpCode, err := exchangeHandler.Get("orgs/"+polOrg+"/business/policies"+cliutils.AddSlash(policy), cliutils.OrgAndCreds(org, credToUse), &policyList); err != nil {
+		return err
+	} else if httpCode == 404 && policy != "" {
+		return cliutils.CLIError{StatusCode: cliutils.NOT_FOUND, msgPrinter.Sprintf("Policy %s not found in org %s", policy, polOrg))
 	} else if httpCode == 404 {
 		policyNameList := []string{}
 		fmt.Println(policyNameList)
@@ -47,7 +50,7 @@ func BusinessListPolicy(org string, credToUse string, policy string, namesOnly b
 		}
 		jsonBytes, err := json.MarshalIndent(policyNameList, "", cliutils.JSON_INDENT)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn exchange deployment listpolicy' output: %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn exchange deployment listpolicy' output: %v", err))
 		}
 		fmt.Println(string(jsonBytes))
 	} else {
@@ -57,46 +60,53 @@ func BusinessListPolicy(org string, credToUse string, policy string, namesOnly b
 		enc.SetIndent("", cliutils.JSON_INDENT)
 		err := enc.Encode(policyList.BusinessPolicy)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn exchange deployment listpolicy' output: %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn exchange deployment listpolicy' output: %v", err))
 		}
 		fmt.Println(string(buf.String()))
 	}
+
+	return nil
 }
 
 //BusinessAddPolicy will add a new policy or overwrite an existing policy byt he same name in the Horizon Exchange
-func BusinessAddPolicy(org string, credToUse string, policy string, jsonFilePath string, noConstraints bool) {
-
-	//check for ExchangeUrl early on
-	var exchUrl = cliutils.GetExchangeUrl()
-
+func BusinessAddPolicy(org string, credToUse string, policy string, jsonFilePath string, noConstraints bool, exchangeHandler cliutils.ServiceHandler) error {
 	cliutils.SetWhetherUsingApiKey(credToUse)
 	var polOrg string
-	polOrg, policy = cliutils.TrimOrg(org, policy)
+	var err error
+	if polOrg, policy, err = cliutils.TrimOrg(org, policy); err != nil {
+		return err
+	}
 
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	//read in the new business policy from file
-	newBytes := cliconfig.ReadJsonFileWithLocalConfig(jsonFilePath)
-	var policyFile businesspolicy.BusinessPolicy
-	err := json.Unmarshal(newBytes, &policyFile)
+	newBytes, err := cliconfig.ReadJsonFileWithLocalConfig(jsonFilePath)
 	if err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal json input file %s: %v", jsonFilePath, err))
+		return err
+	}
+	var policyFile businesspolicy.BusinessPolicy
+	err = json.Unmarshal(newBytes, &policyFile)
+	if err != nil {
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal json input file %s: %v", jsonFilePath, err))
 	}
 
 	//validate the format of the business policy
 	err = policyFile.Validate()
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Incorrect deployment policy format in file %s: %v", jsonFilePath, err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Incorrect deployment policy format in file %s: %v", jsonFilePath, err))
 	}
 
 	// validate and verify the secret bindings
-	ec := cliutils.GetUserExchangeContext(org, credToUse)
+	ec, err := cliutils.GetUserExchangeContext(org, credToUse)
+	if err != nil {
+		return err
+	}
 	verifySecretBindingForPolicy(&policyFile, polOrg, ec)
 
 	// if the --no-constraints flag is not specified and the given policy has no constraints, alert the user.
 	if (!noConstraints) && policyFile.HasNoConstraints() {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("The deployment policy has no constraints which might result in the service being deployed to all nodes. Please specify --no-constraints to confirm that this is acceptable."))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("The deployment policy has no constraints which might result in the service being deployed to all nodes. Please specify --no-constraints to confirm that this is acceptable."))
 	}
 
 	var resp struct {
@@ -104,53 +114,60 @@ func BusinessAddPolicy(org string, credToUse string, policy string, jsonFilePath
 		Msg  string `json:"msg"`
 	}
 	//add/overwrite business policy file
-	httpCode := cliutils.ExchangePutPost("Exchange", http.MethodPost, exchUrl, "orgs/"+polOrg+"/business/policies"+cliutils.AddSlash(policy), cliutils.OrgAndCreds(org, credToUse), []int{201, 403}, policyFile, &resp)
-	if httpCode == 403 {
+	if httpCode, err := exchangeHandler.Post("orgs/"+polOrg+"/business/policies"+cliutils.AddSlash(policy), cliutils.OrgAndCreds(org, credToUse), policyFile, &resp); err != nil {
+		return err
+	} else if httpCode == 403 {
 		//try to update the existing policy
-		httpCode = cliutils.ExchangePutPost("Exchange", http.MethodPut, exchUrl, "orgs/"+polOrg+"/business/policies"+cliutils.AddSlash(policy), cliutils.OrgAndCreds(org, credToUse), []int{201, 404}, policyFile, nil)
+		if httpCode, err = exchangeHandler.Put("orgs/"+polOrg+"/business/policies"+cliutils.AddSlash(policy), cliutils.OrgAndCreds(org, credToUse), policyFile, nil); err != nil {
+			return err
+		}
 		if httpCode == 201 {
 			msgPrinter.Printf("Deployment policy: %v/%v updated in the Horizon Exchange", polOrg, policy)
 			msgPrinter.Println()
 		} else if httpCode == 404 {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Cannot create deployment policy %v/%v: %v", polOrg, policy, resp.Msg))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Cannot create deployment policy %v/%v: %v", polOrg, policy, resp.Msg))
 		}
 	} else {
 		msgPrinter.Printf("Deployment policy: %v/%v added in the Horizon Exchange", polOrg, policy)
 		msgPrinter.Println()
 	}
+
+	return nil
 }
 
 //BusinessUpdatePolicy will replace a single attribute of a business policy in the Horizon Exchange
-func BusinessUpdatePolicy(org string, credToUse string, policyName string, filePath string) {
-
-	//check for ExchangeUrl early on
-	var exchUrl = cliutils.GetExchangeUrl()
-
+func BusinessUpdatePolicy(org string, credToUse string, policyName string, filePath string, exchangeHandler cliutils.ServiceHandler) error {
 	cliutils.SetWhetherUsingApiKey(credToUse)
 	var polOrg string
-	polOrg, policyName = cliutils.TrimOrg(org, policyName)
+	var err error
+	if polOrg, policyName, err = cliutils.TrimOrg(org, policyName); err != nil {
+		return err
+	}
 
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	//Read in the file
-	attribute := cliconfig.ReadJsonFileWithLocalConfig(filePath)
+	attribute, err := cliconfig.ReadJsonFileWithLocalConfig(filePath)
+	if err != nil {
+		return err
+	}
 
 	//verify that the policy exists
 	var exchangePolicy exchange.GetBusinessPolicyResponse
-	httpCode := cliutils.ExchangeGet("Exchange", exchUrl, "orgs/"+polOrg+"/business/policies"+cliutils.AddSlash(policyName), cliutils.OrgAndCreds(org, credToUse), []int{200, 404}, &exchangePolicy)
-	if httpCode == 404 {
-		cliutils.Fatal(cliutils.NOT_FOUND, msgPrinter.Sprintf("Policy %s not found in org %s", policyName, polOrg))
+	if httpCode, err := exchangeHandler.Get("orgs/"+polOrg+"/business/policies"+cliutils.AddSlash(policyName), cliutils.OrgAndCreds(org, credToUse), &exchangePolicy); err != nil {
+		return err
+	} else if httpCode == 404 {
+		return cliutils.CLIError{StatusCode: cliutils.NOT_FOUND, msgPrinter.Sprintf("Policy %s not found in org %s", policyName, polOrg))
 	}
 
 	findPatchType := make(map[string]interface{})
 
 	if err := json.Unmarshal([]byte(attribute), &findPatchType); err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal json input file %s: %v", filePath, err))
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal json input file %s: %v", filePath, err))
 	}
 
 	var patch interface{}
-	var err error
 	if _, ok := findPatchType["service"]; ok {
 		patch = make(map[string]businesspolicy.ServiceRef)
 		err = json.Unmarshal([]byte(attribute), &patch)
@@ -162,7 +179,7 @@ func BusinessUpdatePolicy(org string, credToUse string, policyName string, fileP
 			newValue := props["properties"]
 			err1 := newValue.Validate()
 			if err1 != nil {
-				cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid format for properties: %v", err1))
+				return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid format for properties: %v", err1))
 			}
 		}
 	} else if _, ok := findPatchType["constraints"]; ok {
@@ -173,7 +190,7 @@ func BusinessUpdatePolicy(org string, credToUse string, policyName string, fileP
 			newValue := constraints["constraints"]
 			_, err1 := newValue.Validate()
 			if err1 != nil {
-				cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid format for constraints: %v", err1))
+				return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid format for constraints: %v", err1))
 			}
 		}
 	} else if _, ok := findPatchType["userInput"]; ok {
@@ -188,7 +205,10 @@ func BusinessUpdatePolicy(org string, credToUse string, policyName string, fileP
 			for _, exchPol := range exchangePolicy.BusinessPolicy {
 				pol := exchPol.GetBusinessPolicy()
 				pol.SecretBinding = sb["secretBinding"]
-				ec := cliutils.GetUserExchangeContext(org, credToUse)
+				ec, err := cliutils.GetUserExchangeContext(org, credToUse)
+				if err != nil {
+					return err
+				}
 				verifySecretBindingForPolicy(&pol, polOrg, ec)
 
 				break
@@ -201,25 +221,32 @@ func BusinessUpdatePolicy(org string, credToUse string, policyName string, fileP
 			patch = make(map[string]string)
 			err = json.Unmarshal([]byte(attribute), &patch)
 		} else {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Deployment policy attribute to be updated is not found in the input file. Supported attributes are: label, description, service, properties, constraints, userInput and secretBinding."))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Deployment policy attribute to be updated is not found in the input file. Supported attributes are: label, description, service, properties, constraints, userInput and secretBinding."))
 		}
 	}
 
 	if err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal attribute input %s: %v", attribute, err))
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal attribute input %s: %v", attribute, err))
 	}
 	msgPrinter.Printf("Updating Policy %v/%v in the Horizon Exchange and re-evaluating all agreements based on this deployment policy. Existing agreements might be cancelled and re-negotiated.", polOrg, policyName)
 	msgPrinter.Println()
-	cliutils.ExchangePutPost("Exchange", http.MethodPatch, exchUrl, "orgs/"+polOrg+"/business/policies"+cliutils.AddSlash(policyName), cliutils.OrgAndCreds(org, credToUse), []int{201}, patch, nil)
+	if _, err = exchangeHandler.Patch("orgs/"+polOrg+"/business/policies"+cliutils.AddSlash(policyName), cliutils.OrgAndCreds(org, credToUse), patch, nil); err != nil {
+		return err
+	}
 	msgPrinter.Printf("Policy %v/%v updated in the Horizon Exchange", polOrg, policyName)
 	msgPrinter.Println()
+
+	return nil
 }
 
 //BusinessRemovePolicy will remove an existing business policy in the Horizon Exchange
-func BusinessRemovePolicy(org string, credToUse string, policy string, force bool) {
+func BusinessRemovePolicy(org string, credToUse string, policy string, force bool, exchangeHandler cliutils.ServiceHandler) error {
 	cliutils.SetWhetherUsingApiKey(credToUse)
 	var polOrg string
-	polOrg, policy = cliutils.TrimOrg(org, policy)
+	var err error
+	if polOrg, policy, err = cliutils.TrimOrg(org, policy); err != nil {
+		return err
+	}
 
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
@@ -229,8 +256,9 @@ func BusinessRemovePolicy(org string, credToUse string, policy string, force boo
 	}
 
 	//remove policy
-	httpCode := cliutils.ExchangeDelete("Exchange", cliutils.GetExchangeUrl(), "orgs/"+polOrg+"/business/policies"+cliutils.AddSlash(policy), cliutils.OrgAndCreds(org, credToUse), []int{204, 404})
-	if httpCode == 404 {
+	if httpCode, err := exchangeHandler.Delete("orgs/"+polOrg+"/business/policies"+cliutils.AddSlash(policy), cliutils.OrgAndCreds(org, credToUse)); err != nil {
+		return err
+	} else if httpCode == 404 {
 		msgPrinter.Printf("Policy %v/%v not found in the Horizon Exchange", polOrg, policy)
 		msgPrinter.Println()
 	} else {
@@ -239,6 +267,8 @@ func BusinessRemovePolicy(org string, credToUse string, policy string, force boo
 		msgPrinter.Printf("Deployment policy %v/%v removed", polOrg, policy)
 		msgPrinter.Println()
 	}
+
+	return nil
 }
 
 // Validate and verify the secret binding defined in the given deployment policy.
@@ -252,7 +282,7 @@ func verifySecretBindingForPolicy(policy *businesspolicy.BusinessPolicy, polOrg 
 	// make sure the all the service secrets have bindings.
 	neededSB, extraneousSB, err := ValidateSecretBindingForDeplPolicy(policy, ec, true, msgPrinter)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Failed to validate the secret binding. %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Failed to validate the secret binding. %v", err))
 	} else if extraneousSB != nil && len(extraneousSB) > 0 {
 		msgPrinter.Printf("Note: The following secret bindings are not required by any services for this deployment policy:")
 		msgPrinter.Println()
@@ -271,7 +301,7 @@ func verifySecretBindingForPolicy(policy *businesspolicy.BusinessPolicy, polOrg 
 	vaultSecretExists := exchange.GetHTTPVaultSecretExistsHandler(ec)
 	msgMap, err := compcheck.VerifyVaultSecrets(neededSB, polOrg, agbotUrl, vaultSecretExists, msgPrinter)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Failed to verify the binding secret in the secret manager. %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Failed to verify the binding secret in the secret manager. %v", err))
 	} else if msgMap != nil && len(msgMap) > 0 {
 		msgPrinter.Printf("Warning: The following binding secrets cannot be verified in the secret manager:")
 		msgPrinter.Println()

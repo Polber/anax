@@ -75,6 +75,15 @@ const (
 	NOHEARTBEAT_PARAM = "noheartbeat=true"
 )
 
+type CLIError struct {
+	Message    	string
+	StatusCode 	int
+}
+
+func (m CLIError) Error() string {
+	return i18n.GetMessagePrinter().Sprintf("Error: %s", m.Message)
+}
+
 // Holds the cmd line flags that were set so other pkgs can access
 type GlobalOptions struct {
 	Verbose     *bool
@@ -166,44 +175,47 @@ func SplitIdToken(idToken string) (id, token string) {
 }
 
 // Unmarshal simply calls json.Unmarshal and handles any errors
-func Unmarshal(data []byte, v interface{}, errMsg string) {
+func Unmarshal(data []byte, v interface{}, errMsg string) error {
 	err := json.Unmarshal(data, v)
 	if err != nil {
-		Fatal(JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to unmarshal bytes from %s: %v", errMsg, err))
+		return CLIError{StatusCode: JSON_PARSING_ERROR, Message: i18n.GetMessagePrinter().Sprintf("failed to unmarshal bytes from %s: %v", errMsg, err)}
 	}
+	return nil
 }
 
 // MarshalIndent calls json.MarshalIndent and handles any errors
-func MarshalIndent(v interface{}, errMsg string) string {
+func MarshalIndent(v interface{}, errMsg string) (string, error) {
 	jsonBytes, err := json.MarshalIndent(v, "", JSON_INDENT)
 	if err != nil {
-		Fatal(JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal data type from %s: %v", errMsg, err))
+		return "", CLIError{StatusCode: JSON_PARSING_ERROR, Message: i18n.GetMessagePrinter().Sprintf("failed to marshal data type from %s: %v", errMsg, err)}
 	}
-	return string(jsonBytes)
+	return string(jsonBytes), nil
 }
 
 //todo: this function should be removed because it was for WIoTP keys that shouldn't have the org prepended.
 //		The name is also very misleading because it doesn't apply to Cloud IAM api keys.
 // SetWhetherUsingApiKey is a hack because some api keys are global and shouldn't be prepended by the org
 // an api key or device id/token.
-func SetWhetherUsingApiKey(creds string) {
+func SetWhetherUsingApiKey(creds string) error {
 	if os.Getenv("USING_API_KEY") == "0" {
-		return // this is their way of telling us that even though the creds look like an api key it isn't
+		return nil // this is their way of telling us that even though the creds look like an api key it isn't
 	}
 	// Some API keys start with: a-<6charorgid>-
 	if matched, err := regexp.MatchString(`^a-[A-Za-z0-9]{6}-`, creds); err != nil {
-		Fatal(INTERNAL_ERROR, i18n.GetMessagePrinter().Sprintf("problem testing api key match: %v", err))
+		return CLIError{StatusCode: INTERNAL_ERROR, Message: i18n.GetMessagePrinter().Sprintf("problem testing api key match: %v", err)}
 	} else if matched {
 		Opts.UsingApiKey = true
 		Verbose(i18n.GetMessagePrinter().Sprintf("Using API key"))
 	}
+	return nil
 }
 
-func NewDockerClient() (client *dockerclient.Client) {
+func NewDockerClient() (client *dockerclient.Client, returnErr error) {
 	var err error
 	dockerEndpoint := "unix:///var/run/docker.sock" // if we need this to be user configurable someday, we can get it from an env var
 	if client, err = dockerclient.NewClient(dockerEndpoint); err != nil {
-		Fatal(CLI_GENERAL_ERROR, i18n.GetMessagePrinter().Sprintf("unable to create docker client: %v", err))
+		returnErr = CLIError{StatusCode: CLI_GENERAL_ERROR, Message: i18n.GetMessagePrinter().Sprintf("unable to create docker client: %v", err)}
+		return
 	}
 	return
 }
@@ -239,7 +251,7 @@ func GetDockerAuth(domain string) (auth dockerclient.AuthConfiguration, err erro
 
 // PushDockerImage pushes the image to its docker registry, outputting progress to stdout. It returns the repo digest. If there is an error, it prints the error and exits.
 // We don't have to handle the case of a digest in the image name, because in that case we assume the image has already been pushed (that is the way to get the digest).
-func PushDockerImage(client *dockerclient.Client, domain, path, tag string) (digest string) {
+func PushDockerImage(client *dockerclient.Client, domain, path, tag string) (digest string, returnErr error) {
 	var repository string // for PushImageOptions later on
 	if domain == "" {
 		repository = path
@@ -261,16 +273,18 @@ func PushDockerImage(client *dockerclient.Client, domain, path, tag string) (dig
 	var auth dockerclient.AuthConfiguration
 	var err error
 	if auth, err = GetDockerAuth(domain); err != nil {
-		Fatal(CLI_INPUT_ERROR, msgPrinter.Sprintf("could not get docker credentials from ~/.docker/config.json: %v. Maybe you need to run 'docker login ...' to provide credentials for the image registry.", err))
+		returnErr = CLIError{StatusCode: CLI_INPUT_ERROR, Message: msgPrinter.Sprintf("could not get docker credentials from ~/.docker/config.json: %v. Maybe you need to run 'docker login ...' to provide credentials for the image registry.", err)}
+		return
 	}
 
 	// Now actually push the image
 	if err = client.PushImage(opts, auth); err != nil {
-		Fatal(CLI_GENERAL_ERROR, msgPrinter.Sprintf("unable to push docker image %v: %v", repository+":"+tag, err))
+		returnErr = CLIError{StatusCode: CLI_GENERAL_ERROR, Message: msgPrinter.Sprintf("unable to push docker image %v: %v", repository+":"+tag, err)}
+		return
 	}
 
 	// Get the digest value from the docker output or the image itself.
-	digest = retrieveDigest(client, buf, repository, imageName)
+	digest, returnErr = retrieveDigest(client, buf, repository, imageName)
 	return
 }
 
@@ -313,7 +327,7 @@ func PullDockerImage(client *dockerclient.Client, domain, path, tag string) (dig
 	}
 
 	// Get the digest value from the docker output or the image itself.
-	digest = retrieveDigest(client, buf, repository, imageName)
+	digest, err = retrieveDigest(client, buf, repository, imageName)
 
 	return
 
@@ -321,7 +335,7 @@ func PullDockerImage(client *dockerclient.Client, domain, path, tag string) (dig
 
 // Get the image digest so that it can be set into the published service definition. The digest will be in
 // the stdout from the docker pull/push that was done previously, or it can be retrieved from the image itself.
-func retrieveDigest(client *dockerclient.Client, buf bytes.Buffer, repository string, imageName string) (digest string) {
+func retrieveDigest(client *dockerclient.Client, buf bytes.Buffer, repository string, imageName string) (digest string, returnErr error) {
 
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -337,7 +351,8 @@ func retrieveDigest(client *dockerclient.Client, buf bytes.Buffer, repository st
 
 	// The digest was not in the stdout response, try to find it in the image's metadata.
 	if image, err := client.InspectImage(imageName); err != nil {
-		Fatal(CLI_GENERAL_ERROR, msgPrinter.Sprintf("could not inspect image %v: %v.", imageName, err))
+		returnErr = CLIError{StatusCode: CLI_GENERAL_ERROR, Message: msgPrinter.Sprintf("could not inspect image %v: %v.", imageName, err)}
+		return
 	} else {
 		for _, rDigest := range image.RepoDigests {
 			if strings.Contains(rDigest, repository) {
@@ -345,9 +360,9 @@ func retrieveDigest(client *dockerclient.Client, buf bytes.Buffer, repository st
 				return
 			}
 		}
-		Fatal(CLI_GENERAL_ERROR, msgPrinter.Sprintf("could not find digest for image %v.", imageName))
+		returnErr = CLIError{StatusCode: CLI_GENERAL_ERROR, Message: msgPrinter.Sprintf("could not find digest for image %v.", imageName)}
+		return
 	}
-	return
 }
 
 // OrgAndCreds prepends the org to creds (separated by /) unless creds already has an org prepended
@@ -373,42 +388,40 @@ func AddSlash(id string) string {
 
 // TrimOrg returns id with the leading "<org>/" removed, if it was there. This is useful because in list sub-cmds id is shown with
 // the org prepended, but when the id is put in routes it can not have the org prepended, because org is already earlier in the route.
-func TrimOrg(org, id string) (string, string) {
+func TrimOrg(org, id string) (string, string, error) {
 	substrings := strings.Split(id, "/")
 	if len(substrings) <= 1 { // this means id was empty, or did not contain '/'
-		return org, id
+		return org, id, nil
 	} else if len(substrings) == 2 {
-		return substrings[0], substrings[1] // in this case the org the prepended to the id will override the org they may have specified thru the -o flag or env var
+		return substrings[0], substrings[1], nil // in this case the org the prepended to the id will override the org they may have specified thru the -o flag or env var
 	} else {
-		Fatal(CLI_INPUT_ERROR, i18n.GetMessagePrinter().Sprintf("the id can not contain more than 1 '/'"))
+		return "", "", CLIError{StatusCode: CLI_INPUT_ERROR, Message: i18n.GetMessagePrinter().Sprintf("the id can not contain more than 1 '/'")}
 	}
-	return "", "" // will never get here
 }
 
 // Add the given org to the id if the id does not already contain an org
-func AddOrg(org, id string) string {
+func AddOrg(org, id string) (string, error) {
 	substrings := strings.Split(id, "/")
 	if len(substrings) <= 1 { // this means id was empty, or did not contain '/'
-		return fmt.Sprintf("%v/%v", org, id)
+		return fmt.Sprintf("%v/%v", org, id), nil
 	} else if len(substrings) == 2 {
-		return id
+		return id, nil
 	} else {
-		Fatal(CLI_INPUT_ERROR, i18n.GetMessagePrinter().Sprintf("the id can not contain more than 1 '/'"))
+		return "", CLIError{StatusCode: CLI_INPUT_ERROR, Message: i18n.GetMessagePrinter().Sprintf("the id can not contain more than 1 '/'")}
 	}
-	return "" // will never get here
 }
 
 // ReadStdin reads from stdin, and returns it as a byte array.
-func ReadStdin() []byte {
+func ReadStdin() ([]byte, error) {
 	fileBytes, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
-		Fatal(FILE_IO_ERROR, i18n.GetMessagePrinter().Sprintf("reading stdin failed: %v", err))
+		return nil, CLIError{StatusCode: FILE_IO_ERROR, Message: i18n.GetMessagePrinter().Sprintf("reading stdin failed: %v", err)}
 	}
-	return fileBytes
+	return fileBytes, nil
 }
 
 // ReadFile reads from a file or stdin, and returns it as a byte array.
-func ReadFile(filePath string) []byte {
+func ReadFile(filePath string) ([]byte, error) {
 	var fileBytes []byte
 	var err error
 	if filePath == "-" {
@@ -417,9 +430,9 @@ func ReadFile(filePath string) []byte {
 		fileBytes, err = ioutil.ReadFile(filePath)
 	}
 	if err != nil {
-		Fatal(FILE_IO_ERROR, i18n.GetMessagePrinter().Sprintf("reading %s failed: %v", filePath, err))
+		return nil, CLIError{StatusCode: FILE_IO_ERROR, Message: i18n.GetMessagePrinter().Sprintf("reading %s failed: %v", filePath, err)}
 	}
-	return fileBytes
+	return fileBytes, nil
 }
 
 // ExpandMapping is used in ExpandEnv() to print a warning if the env var is not defined.
@@ -438,7 +451,7 @@ func ExpandEnv(s string) string {
 }
 
 // ReadJsonFile reads json from a file or stdin, eliminates comments, substitutes env vars, and returns it.
-func ReadJsonFile(filePath string) []byte {
+func ReadJsonFile(filePath string) ([]byte, error) {
 	var fileBytes []byte
 	var err error
 	if filePath == "-" {
@@ -447,7 +460,7 @@ func ReadJsonFile(filePath string) []byte {
 		fileBytes, err = ioutil.ReadFile(filePath)
 	}
 	if err != nil {
-		Fatal(FILE_IO_ERROR, i18n.GetMessagePrinter().Sprintf("reading %s failed: %v", filePath, err))
+		return nil, CLIError{StatusCode: FILE_IO_ERROR, Message: i18n.GetMessagePrinter().Sprintf("reading %s failed: %v", filePath, err)}
 	}
 
 	// Remove /* */ comments
@@ -456,14 +469,14 @@ func ReadJsonFile(filePath string) []byte {
 
 	// Replace env vars
 	if os.Getenv("HZN_DONT_SUBST_ENV_VARS") == "1" {
-		return newBytes
+		return newBytes, nil
 	}
 	str := ExpandEnv(string(newBytes))
-	return []byte(str)
+	return []byte(str), nil
 }
 
 // ConfirmRemove prompts the user to confirm they want to run the destructive cmd
-func ConfirmRemove(question string) {
+func ConfirmRemove(question string) error {
 	// Prompt the user to make sure he/she wants to do this
 	fmt.Print(question + " [y/N]: ")
 	var response string
@@ -471,7 +484,7 @@ func ConfirmRemove(question string) {
 	reader := bufio.NewReader(os.Stdin)
 	response, err := reader.ReadString('\n')
 	if err != nil {
-		Fatal(CLI_INPUT_ERROR, i18n.GetMessagePrinter().Sprintf("Error reading input, error %v", err))
+		return CLIError{StatusCode: CLI_INPUT_ERROR, Message: i18n.GetMessagePrinter().Sprintf("Error reading input, error %v", err)}
 	}
 	response = strings.TrimSuffix(response, "\n")
 	response = strings.ToLower(response)
@@ -481,30 +494,35 @@ func ConfirmRemove(question string) {
 		i18n.GetMessagePrinter().Println()
 		os.Exit(0)
 	}
+	return nil
 }
 
 // WithDefaultKeyFile returns the keyFile path if it has a non-blank value, or the default keys.
-func WithDefaultKeyFile(keyFile string, isPublic bool) string {
+func WithDefaultKeyFile(keyFile string, isPublic bool) (string, error) {
 	var err error
 
 	if keyFile != "" {
-		return VerifySigningKeyInput(keyFile, isPublic)
+		if defaultKeys, err := VerifySigningKeyInput(keyFile, isPublic); err != nil {
+			return "", err
+		} else {
+			return defaultKeys, nil
+		}
 	}
 	// get default file names if input is empty
 	if keyFile, err = GetDefaultSigningKeyFile(isPublic); err != nil {
-		Fatal(CLI_GENERAL_ERROR, err.Error())
+		return "", CLIError{StatusCode: CLI_GENERAL_ERROR, Message: err.Error()}
 		// convert to absolute path
 	} else if keyFile, err = filepath.Abs(keyFile); err != nil {
-		Fatal(CLI_GENERAL_ERROR, i18n.GetMessagePrinter().Sprintf("Failed to get absolute path for file %v. %v", keyFile, err))
+		return "", CLIError{StatusCode: CLI_GENERAL_ERROR, Message: i18n.GetMessagePrinter().Sprintf("Failed to get absolute path for file %v. %v", keyFile, err)}
 		// check file exist
 	} else if _, err := os.Stat(keyFile); err != nil {
 		if os.IsNotExist(err) {
-			return ""
+			return "", nil
 		} else {
-			Fatal(CLI_GENERAL_ERROR, i18n.GetMessagePrinter().Sprintf("Error checking absolute path for file %v. %v", keyFile, err))
+			return "", CLIError{StatusCode: CLI_GENERAL_ERROR, Message: i18n.GetMessagePrinter().Sprintf("Error checking absolute path for file %v. %v", keyFile, err)}
 		}
 	}
-	return keyFile
+	return keyFile, nil
 }
 
 // WithDefaultEnvVar returns the specified flag ptr if it has a non-blank value, or the env var value.
@@ -520,16 +538,15 @@ func WithDefaultEnvVar(flag *string, envVarName string) *string {
 }
 
 // RequiredWithDefaultEnvVar returns the specified flag ptr if it has a non-blank value, or the env var value.
-func RequiredWithDefaultEnvVar(flag *string, envVarName, errMsg string) *string {
+func RequiredWithDefaultEnvVar(flag *string, envVarName, errMsg string) (*string, error) {
 	if *flag != "" {
-		return flag
+		return flag, nil
 	}
 	newFlag := os.Getenv(envVarName)
 	if newFlag != "" {
-		return &newFlag
+		return &newFlag, nil
 	}
-	Fatal(CLI_INPUT_ERROR, errMsg)
-	return flag // won't ever happen, here just to make intellij happy
+	return nil, CLIError{StatusCode: CLI_INPUT_ERROR, Message: errMsg}
 }
 
 // GetHorizonUrlBase returns the base part of the horizon api url (which can be overridden by env var HORIZON_URL)
@@ -594,16 +611,16 @@ func GetAgbotSecureAPIUrlBase() string {
 }
 
 // GetRespBodyAsString converts an http response body to a string
-func GetRespBodyAsString(responseBody io.ReadCloser) string {
+func GetRespBodyAsString(responseBody io.ReadCloser) (string, error) {
 	if responseBody == nil {
-		return ""
+		return "", nil
 	}
 
 	buf := new(bytes.Buffer)
 	if _, err := buf.ReadFrom(responseBody); err != nil {
-		Fatal(HTTP_ERROR, i18n.GetMessagePrinter().Sprintf("Error reading HTTP response, error %v", err))
+		return "", CLIError{StatusCode: HTTP_ERROR, Message: i18n.GetMessagePrinter().Sprintf("Error reading HTTP response, error %v", err)}
 	}
-	return buf.String()
+	return buf.String(), nil
 }
 
 func isGoodCode(actualHttpCode int, goodHttpCodes []int) bool {
@@ -618,7 +635,7 @@ func isGoodCode(actualHttpCode int, goodHttpCodes []int) bool {
 	return false
 }
 
-func printHorizonRestError(apiMethod string, err error) {
+func printHorizonRestError(apiMethod string, err error) error {
 	msg := ""
 	if os.Getenv("HORIZON_URL") == "" {
 		statusCommand := "systemctl status horizon"
@@ -631,7 +648,7 @@ func printHorizonRestError(apiMethod string, err error) {
 	} else {
 		msg = i18n.GetMessagePrinter().Sprintf("Can't connect to the Horizon REST API to run %s. Maybe the ssh tunnel associated with that port is down? Or maybe the remote Horizon agent at the other end of that tunnel is down. Specific error is: %v", apiMethod, err)
 	}
-	Fatal(HTTP_ERROR, msg)
+	return CLIError{StatusCode: HTTP_ERROR, Message: msg}
 }
 
 // HorizonGet runs a GET on the anax api and fills in the specified structure with the json.
@@ -652,7 +669,8 @@ func HorizonGet(urlSuffix string, goodHttpCodes []int, structure interface{}, qu
 	// Create the request and run it
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		Fatal(HTTP_ERROR, msgPrinter.Sprintf("%s new request failed: %v", apiMsg, err))
+		retError = CLIError{StatusCode: HTTP_ERROR, Message: msgPrinter.Sprintf("%s new request failed: %v", apiMsg, err)}
+		return
 	}
 	req.Close = true
 	req.Header.Add("Accept", "application/json")
@@ -693,7 +711,8 @@ func HorizonGet(urlSuffix string, goodHttpCodes []int, structure interface{}, qu
 			retError = fmt.Errorf(msgPrinter.Sprintf("Bad HTTP code from %s: %d", apiMsg, httpCode))
 			return
 		} else {
-			Fatal(HTTP_ERROR, msgPrinter.Sprintf("bad HTTP code from %s: %d", apiMsg, httpCode))
+			retError = CLIError{StatusCode: HTTP_ERROR, Message: msgPrinter.Sprintf("bad HTTP code from %s: %d", apiMsg, httpCode)}
+			return
 		}
 	}
 	if httpCode == goodHttpCodes[0] {
@@ -703,7 +722,8 @@ func HorizonGet(urlSuffix string, goodHttpCodes []int, structure interface{}, qu
 				retError = fmt.Errorf(msgPrinter.Sprintf("Failed to read body response from %s: %v", apiMsg, err))
 				return
 			} else {
-				Fatal(HTTP_ERROR, msgPrinter.Sprintf("failed to read body response from %s: %v", apiMsg, err))
+				retError = CLIError{StatusCode: HTTP_ERROR, Message: msgPrinter.Sprintf("failed to read body response from %s: %v", apiMsg, err)}
+				return
 			}
 		}
 		switch s := structure.(type) {
@@ -718,7 +738,8 @@ func HorizonGet(urlSuffix string, goodHttpCodes []int, structure interface{}, qu
 					retError = fmt.Errorf(msgPrinter.Sprintf("Failed to unmarshal body response from %s: %v", apiMsg, err))
 					return
 				} else {
-					Fatal(JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal body response from %s: %v", apiMsg, err))
+					retError = CLIError{StatusCode: JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to unmarshal body response from %s: %v", apiMsg, err)}
+					return
 				}
 			}
 		}
@@ -778,11 +799,20 @@ func HorizonDelete(urlSuffix string, goodHttpCodes []int, expectedHttpErrorCodes
 	if isGoodCode(httpCode, goodHttpCodes) {
 		return
 	} else if isGoodCode(httpCode, expectedHttpErrorCodes) {
-		err_msg := GetRespBodyAsString(resp.Body)
-		retError = fmt.Errorf(err_msg)
-		return
+		if err_msg, err := GetRespBodyAsString(resp.Body); err != nil {
+			retError =  err
+			return
+		} else {
+			retError = fmt.Errorf(err_msg)
+			return
+		}
 	} else {
-		err_msg := msgPrinter.Sprintf("bad HTTP code %d from %s: %s", httpCode, apiMsg, GetRespBodyAsString(resp.Body))
+		var err_msg string
+		if respBody, err := GetRespBodyAsString(resp.Body); err != nil {
+			err_msg = err.Error()
+		} else {
+			err_msg = msgPrinter.Sprintf("bad HTTP code %d from %s: %s", httpCode, apiMsg, respBody)
+		}
 		if quiet {
 			retError = fmt.Errorf(err_msg)
 			return
@@ -823,7 +853,8 @@ func HorizonPutPost(method string, urlSuffix string, goodHttpCodes []int, body i
 		var err error
 		jsonBytes, err = json.Marshal(body)
 		if exitOnErr && err != nil {
-			Fatal(JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal body for %s: %v", apiMsg, err))
+			err = CLIError{StatusCode: JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal body for %s: %v", apiMsg, err)}
+			return 0, "", err
 		} else if err != nil {
 			return 0, "", err
 		}
@@ -833,7 +864,8 @@ func HorizonPutPost(method string, urlSuffix string, goodHttpCodes []int, body i
 	// Create the request and run it
 	req, err := http.NewRequest(method, url, requestBody)
 	if exitOnErr && err != nil {
-		Fatal(HTTP_ERROR, msgPrinter.Sprintf("%s new request failed: %v", apiMsg, err))
+		err = CLIError{StatusCode: HTTP_ERROR, Message: msgPrinter.Sprintf("%s new request failed: %v", apiMsg, err)}
+		return 0, "", err
 	} else if err != nil {
 		return 0, "", err
 	}
@@ -858,10 +890,13 @@ func HorizonPutPost(method string, urlSuffix string, goodHttpCodes []int, body i
 	httpCode = resp.StatusCode
 	Verbose(msgPrinter.Sprintf("HTTP code: %d", httpCode))
 
-	resp_body = GetRespBodyAsString(resp.Body)
+	if resp_body, err = GetRespBodyAsString(resp.Body); err != nil {
+		return
+	}
 	if !isGoodCode(httpCode, goodHttpCodes) {
 		if exitOnErr {
-			Fatal(HTTP_ERROR, msgPrinter.Sprintf("bad HTTP code %d from %s: %s", httpCode, apiMsg, resp_body))
+			err = CLIError{StatusCode: HTTP_ERROR, Message: msgPrinter.Sprintf("bad HTTP code %d from %s: %s", httpCode, apiMsg, resp_body)}
+			return 0, "", err
 		} else {
 			return 0, "", fmt.Errorf(msgPrinter.Sprintf("bad HTTP code %d from %s: %s", httpCode, apiMsg, resp_body))
 		}
@@ -871,26 +906,27 @@ func HorizonPutPost(method string, urlSuffix string, goodHttpCodes []int, body i
 
 // Runs a GET to the agbot secure API and fills in the specified json structure. if the structure is just a string, fill in the raw json.
 // If the list of goodHttpCodes is non-empty and none match the actual http code, it will exit with an error; otherwise, the actual code is returned
-func AgbotGet(urlSuffix, credentials string, goodHttpCodes []int, structure interface{}) (httpCode int) {
+func agbotGet(urlSuffix, credentials string, goodHttpCodes []int, structure interface{}) (httpCode int, returnErr error) {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// check the agbot url
 	agbot_url := GetAgbotSecureAPIUrlBase()
 	if agbot_url == "" {
-		Fatal(HTTP_ERROR, msgPrinter.Sprintf("HZN_AGBOT_URL is not defined"))
+		returnErr = CLIError{StatusCode: HTTP_ERROR, Message: msgPrinter.Sprintf("HZN_AGBOT_URL is not defined")}
+		return
 	}
 
 	// query the agbot secure api
-	httpCode = ExchangeGet("Agbot", agbot_url, urlSuffix, credentials, goodHttpCodes, structure)
+	httpCode, returnErr = exchangeGet("Agbot", agbot_url, urlSuffix, credentials, goodHttpCodes, structure)
 
 	// ExchangeGet checks the http code, so we can just directly return
-	return httpCode
+	return httpCode, returnErr
 }
 
 // Runs a LIST to the agbot secure API and fills in the specified json structure. if the structure is just a string, fill in the raw json.
 // If the list of goodHttpCodes is non-empty and none match the actual http code, it will exit with an error; otherwise, the actual code is returned
-func AgbotList(urlSuffix, credentials string, goodHttpCodes []int, structure interface{}) (httpCode int) {
+func agbotList(urlSuffix, credentials string, goodHttpCodes []int, structure interface{}) (httpCode int, returnErr error) {
 
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
@@ -898,7 +934,8 @@ func AgbotList(urlSuffix, credentials string, goodHttpCodes []int, structure int
 	// check the agbot url
 	agbot_url := GetAgbotSecureAPIUrlBase()
 	if agbot_url == "" {
-		Fatal(HTTP_ERROR, msgPrinter.Sprintf("HZN_AGBOT_URL is not defined"))
+		returnErr = CLIError{StatusCode: HTTP_ERROR, Message: msgPrinter.Sprintf("HZN_AGBOT_URL is not defined")}
+		return
 	}
 
 	// query the agbot secure api
@@ -909,7 +946,10 @@ func AgbotList(urlSuffix, credentials string, goodHttpCodes []int, structure int
 
 	httpClient := GetHTTPClient(config.HTTPRequestTimeoutS)
 
-	resp := InvokeRestApi(httpClient, "LIST", url, credentials, nil, "Agbot", apiMsg)
+	var resp *http.Response
+	if resp, returnErr = InvokeRestApi(httpClient, "LIST", url, credentials, nil, "Agbot", apiMsg); returnErr != nil {
+		return
+	}
 	if resp.Body != nil {
 		defer resp.Body.Close()
 	}
@@ -917,12 +957,14 @@ func AgbotList(urlSuffix, credentials string, goodHttpCodes []int, structure int
 	respBody := io.Reader(resp.Body)
 	bodyBytes, err := ioutil.ReadAll(respBody)
 	if err != nil {
-		Fatal(HTTP_ERROR, msgPrinter.Sprintf("failed to read body response from %s: %v", apiMsg, err))
+		returnErr = CLIError{StatusCode: HTTP_ERROR, Message: msgPrinter.Sprintf("failed to read body response from %s: %v", apiMsg, err)}
+		return
 	}
 	httpCode = resp.StatusCode
 	Verbose(msgPrinter.Sprintf("HTTP code: %d", httpCode))
 	if !isGoodCode(httpCode, goodHttpCodes) {
-		Fatal(HTTP_ERROR, msgPrinter.Sprintf("bad HTTP code %d from %s, output: %s", httpCode, apiMsg, string(bodyBytes)))
+		returnErr = CLIError{StatusCode: HTTP_ERROR, Message: msgPrinter.Sprintf("bad HTTP code %d from %s, output: %s", httpCode, apiMsg, string(bodyBytes))}
+		return
 	}
 
 	if len(bodyBytes) > 0 && structure != nil { // the DP front-end of exchange will return nothing when auth problem
@@ -936,17 +978,20 @@ func AgbotList(urlSuffix, credentials string, goodHttpCodes []int, structure int
 			var jsonStruct interface{}
 			err = json.Unmarshal(bodyBytes, &jsonStruct)
 			if err != nil {
-				Fatal(JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal exchange body response from %s: %v", apiMsg, err))
+				returnErr = CLIError{StatusCode: JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to unmarshal exchange body response from %s: %v", apiMsg, err)}
+				return
 			}
 			jsonBytes, err := json.MarshalIndent(jsonStruct, "", JSON_INDENT)
 			if err != nil {
-				Fatal(JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal exchange output from %s: %v", apiMsg, err))
+				returnErr = CLIError{StatusCode: JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal exchange output from %s: %v", apiMsg, err)}
+				return
 			}
 			*s = string(jsonBytes)
 		default:
 			err = json.Unmarshal(bodyBytes, structure)
 			if err != nil {
-				Fatal(JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal exchange body response from %s: %v", apiMsg, err))
+				returnErr = CLIError{StatusCode: JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to unmarshal exchange body response from %s: %v", apiMsg, err)}
+				return
 			}
 		}
 	}
@@ -956,40 +1001,42 @@ func AgbotList(urlSuffix, credentials string, goodHttpCodes []int, structure int
 // Runs a PUT, POST, or PATCH to the agbot secure API to create or update a resource. If body is a string, it will be given to the exhcnage
 // as json. Otherwise, the struct will be marshaled to json.
 // If the list of goodHttpCodes is non-empty and none match the actual http code, it will exit with an error; otherwise, the actual code is returned
-func AgbotPutPost(method, urlSuffix, credentials string, goodHttpCodes []int, body interface{}, structure interface{}) (httpCode int) {
+func agbotPutPost(method, urlSuffix, credentials string, goodHttpCodes []int, body interface{}, structure interface{}) (httpCode int, returnErr error) {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// check the agbot url
 	agbot_url := GetAgbotSecureAPIUrlBase()
 	if agbot_url == "" {
-		Fatal(HTTP_ERROR, msgPrinter.Sprintf("HZN_AGBOT_URL is not defined"))
+		returnErr = CLIError{StatusCode: HTTP_ERROR, Message: msgPrinter.Sprintf("HZN_AGBOT_URL is not defined")}
+		return
 	}
 
 	// query the agbot secure api
-	httpCode = ExchangePutPost("Agbot", method, agbot_url, urlSuffix, credentials, goodHttpCodes, body, structure)
+	httpCode, returnErr = exchangePutPost("Agbot", method, agbot_url, urlSuffix, credentials, goodHttpCodes, body, structure)
 
 	// ExchangePutPost checks the http code, so we can just directly return
-	return httpCode
+	return httpCode, returnErr
 }
 
 // Runs a DELETE to the agbot secure API to delete a resource.
 // If the list of goodHttpCodes is non-empty and none match the actual http code, it will exit with an error; otherwise, the actual code is returned
-func AgbotDelete(urlSuffix, credentials string, goodHttpCodes []int) (httpCode int) {
+func agbotDelete(urlSuffix, credentials string, goodHttpCodes []int) (httpCode int, returnErr error) {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// check the agbot url
 	agbot_url := GetAgbotSecureAPIUrlBase()
 	if agbot_url == "" {
-		Fatal(HTTP_ERROR, msgPrinter.Sprintf("HZN_AGBOT_URL is not defined"))
+		returnErr = CLIError{StatusCode: HTTP_ERROR, Message: msgPrinter.Sprintf("HZN_AGBOT_URL is not defined")}
+		return
 	}
 
 	// query the agbot secure api
-	httpCode = ExchangeDelete("Agbot", agbot_url, urlSuffix, credentials, goodHttpCodes)
+	httpCode, returnErr = exchangeDelete("Agbot", agbot_url, urlSuffix, credentials, goodHttpCodes)
 
 	// ExchangeDelete checks the http code, so we can just directly return
-	return httpCode
+	return httpCode, returnErr
 }
 
 // get a value keyed by key in a file. The file contains key=value for each line.
@@ -1122,7 +1169,7 @@ func GetExchangeUrlLocationFromAnax() string {
 }
 
 // GetExchangeUrl returns the exchange url from the env var or anax api
-func GetExchangeUrl() string {
+func GetExchangeUrl() (string, error) {
 	exchUrl := os.Getenv("HZN_EXCHANGE_URL")
 
 	// get message printer
@@ -1134,7 +1181,7 @@ func GetExchangeUrl() string {
 		if value != "" {
 			exchUrl = value
 		} else {
-			Fatal(CLI_GENERAL_ERROR, msgPrinter.Sprintf("Could not get the Exchange url from environment variable HZN_EXCHANGE_URL or the horizon agent"))
+			return "", CLIError{StatusCode: CLI_GENERAL_ERROR, Message: msgPrinter.Sprintf("Could not get the Exchange url from environment variable HZN_EXCHANGE_URL or the horizon agent")}
 		}
 	}
 
@@ -1145,11 +1192,11 @@ func GetExchangeUrl() string {
 	}
 
 	Verbose(msgPrinter.Sprintf("The exchange url: %v", exchUrl))
-	return exchUrl
+	return exchUrl, nil
 }
 
 // GetExchangeUrlLocation returns a string with the filename or envvar that GetExchangeUrl is getting the exchange url from
-func GetExchangeUrlLocation() string {
+func GetExchangeUrlLocation() (string, error) {
 
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
@@ -1162,7 +1209,7 @@ func GetExchangeUrlLocation() string {
 		if location != "" {
 			exchUrlLoc = location
 		} else {
-			Fatal(CLI_GENERAL_ERROR, msgPrinter.Sprintf("Could not get the Exchange url from environment variable HZN_EXCHANGE_URL or the horizon agent"))
+			return "", CLIError{StatusCode: CLI_GENERAL_ERROR, Message: msgPrinter.Sprintf("Could not get the Exchange url from environment variable HZN_EXCHANGE_URL or the horizon agent")}
 		}
 	}
 
@@ -1173,7 +1220,7 @@ func GetExchangeUrlLocation() string {
 	}
 
 	Verbose(msgPrinter.Sprintf("The exchange url: %v", exchUrl))
-	return exchUrlLoc
+	return exchUrlLoc, nil
 }
 
 // Get mms url from /etc/default/horizon file. if not set, check /etc/horizon/anax.json file
@@ -1194,7 +1241,7 @@ func GetMMSUrlFromAnax() string {
 }
 
 // GetMMSUrl returns the exchange url from the env var or anax api
-func GetMMSUrl() string {
+func GetMMSUrl() (string, error) {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -1205,7 +1252,7 @@ func GetMMSUrl() string {
 		if value != "" {
 			mmsUrl = value
 		} else {
-			Fatal(CLI_GENERAL_ERROR, msgPrinter.Sprintf("Could not get the model management service url from environment variable HZN_FSS_CSSURL or the horizon agent"))
+			return "", CLIError{StatusCode: CLI_GENERAL_ERROR, Message: msgPrinter.Sprintf("Could not get the model management service url from environment variable HZN_FSS_CSSURL or the horizon agent")}
 		}
 	}
 
@@ -1216,11 +1263,11 @@ func GetMMSUrl() string {
 	}
 
 	Verbose(msgPrinter.Sprintf("The model management service url: %v", mmsUrl))
-	return mmsUrl
+	return mmsUrl, nil
 }
 
 // GetSdoSvcUrl returns the url of the Horizon mgmt hub SDO owner service from env var or anax overwrite file
-func GetSdoSvcUrl() string {
+func GetSdoSvcUrl() (string, error) {
 	msgPrinter := i18n.GetMessagePrinter()
 
 	sdoUrl := os.Getenv("HZN_SDO_SVC_URL")
@@ -1230,16 +1277,16 @@ func GetSdoSvcUrl() string {
 		if sdoUrl, err = GetEnvVarFromFile(ANAX_OVERWRITE_FILE, "HZN_SDO_SVC_URL"); err != nil {
 			Verbose(i18n.GetMessagePrinter().Sprintf("Error getting HZN_SDO_SVC_URL from %v: %v", ANAX_OVERWRITE_FILE, err))
 		} else if sdoUrl == "" {
-			Fatal(CLI_GENERAL_ERROR, msgPrinter.Sprintf("Could not get the HZN_SDO_SVC_URL value from the environment, %s, or one of the hzn.json files", ANAX_OVERWRITE_FILE))
+			return "", CLIError{StatusCode: CLI_GENERAL_ERROR, Message: msgPrinter.Sprintf("Could not get the HZN_SDO_SVC_URL value from the environment, %s, or one of the hzn.json files", ANAX_OVERWRITE_FILE)}
 		}
 	}
 	sdoUrl = strings.TrimSuffix(sdoUrl, "/")
 
 	Verbose(msgPrinter.Sprintf("The SDO service url: %v", sdoUrl))
-	return sdoUrl
+	return sdoUrl, nil
 }
 
-func printHorizonServiceRestError(horizonService string, apiMethod string, err error) {
+func printHorizonServiceRestError(horizonService string, apiMethod string, err error) error {
 	serviceEnvVarName := "HZN_EXCHANGE_URL"
 	article := "an"
 	if horizonService == "Model Management Service" {
@@ -1251,20 +1298,19 @@ func printHorizonServiceRestError(horizonService string, apiMethod string, err e
 	}
 
 	if os.Getenv(serviceEnvVarName) == "" {
-		Fatal(HTTP_ERROR, i18n.GetMessagePrinter().Sprintf("Can't connect to the Horizon %v REST API to run %s. Set %v to use %v %v other than the one the Horizon Agent is currently configured for. Specific error is: %v", horizonService, apiMethod, serviceEnvVarName, article, horizonService, err))
+		return CLIError{StatusCode: HTTP_ERROR, Message: i18n.GetMessagePrinter().Sprintf("Can't connect to the Horizon %v REST API to run %s. Set %v to use %v %v other than the one the Horizon Agent is currently configured for. Specific error is: %v", horizonService, apiMethod, serviceEnvVarName, article, horizonService, err)}
 	} else {
-		Fatal(HTTP_ERROR, i18n.GetMessagePrinter().Sprintf("Can't connect to the Horizon %v REST API to run %s. Maybe %v is set incorrectly? Or unset %v to use the %v that the Horizon Agent is configured for. Specific error is: %v", horizonService, apiMethod, serviceEnvVarName, serviceEnvVarName, horizonService, err))
+		return CLIError{StatusCode: HTTP_ERROR, Message: i18n.GetMessagePrinter().Sprintf("Can't connect to the Horizon %v REST API to run %s. Maybe %v is set incorrectly? Or unset %v to use the %v that the Horizon Agent is configured for. Specific error is: %v", horizonService, apiMethod, serviceEnvVarName, serviceEnvVarName, horizonService, err)}
 	}
-
 }
 
 // creates an request body for http calls. Only PUT/PATCH/POST calls has request body.
-func createRequestBody(body interface{}, apiMsg string) (io.Reader, int, int) {
+func createRequestBody(body interface{}, apiMsg string) (io.Reader, int, int, error) {
 
 	bodyType := HTTP_REQ_BODYTYPE_DEFAULT
 
 	if body == nil {
-		return nil, 0, bodyType
+		return nil, 0, bodyType, nil
 	}
 
 	// get message printer
@@ -1287,7 +1333,7 @@ func createRequestBody(body interface{}, apiMsg string) (io.Reader, int, int) {
 		var err error
 		jsonBytes, err = json.Marshal(body)
 		if err != nil {
-			Fatal(JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal exchange body for %s: %v", apiMsg, err))
+			return nil, 0, 0, CLIError{StatusCode: JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal exchange body for %s: %v", apiMsg, err)}
 		}
 	}
 
@@ -1306,11 +1352,11 @@ func createRequestBody(body interface{}, apiMsg string) (io.Reader, int, int) {
 		bodyLen = len(jsonBytes)
 	}
 
-	return requestBody, bodyLen, bodyType
+	return requestBody, bodyLen, bodyType, nil
 }
 
 // invoke rest api call with retry
-func InvokeRestApi(httpClient *http.Client, method string, urlPath string, credentials string, body interface{}, service string, apiMsg string) *http.Response {
+func InvokeRestApi(httpClient *http.Client, method string, urlPath string, credentials string, body interface{}, service string, apiMsg string) (*http.Response, error) {
 
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
@@ -1318,18 +1364,18 @@ func InvokeRestApi(httpClient *http.Client, method string, urlPath string, crede
 	// encode the url so that it can accept unicode
 	urlObj, errUrl := url.Parse(urlPath)
 	if errUrl != nil {
-		Fatal(CLI_INPUT_ERROR, msgPrinter.Sprintf("Malformed URL: %v. %v", urlPath, errUrl))
+		return nil, CLIError{StatusCode: CLI_INPUT_ERROR, Message: msgPrinter.Sprintf("Malformed URL: %v. %v", urlPath, errUrl)}
 	}
 	urlObj.RawQuery = urlObj.Query().Encode()
 
 	if err := TrustIcpCert(httpClient); err != nil {
-		Fatal(FILE_IO_ERROR, err.Error())
+		return nil, CLIError{StatusCode: FILE_IO_ERROR, Message: err.Error()}
 	}
 
 	// get retry count and retry interval from env
 	maxRetries, retryInterval, err := GetHttpRetryParameters(5, 2)
 	if err != nil {
-		Fatal(CLI_GENERAL_ERROR, err.Error())
+		return nil, CLIError{StatusCode: CLI_GENERAL_ERROR, Message: err.Error()}
 	}
 
 	retryCount := 0
@@ -1337,7 +1383,10 @@ func InvokeRestApi(httpClient *http.Client, method string, urlPath string, crede
 		retryCount++
 
 		// requestBody is nil if body is nil.
-		requestBody, bodyLen, bodyType := createRequestBody(body, apiMsg)
+		requestBody, bodyLen, bodyType, err := createRequestBody(body, apiMsg)
+		if err != nil {
+			return nil, err
+		}
 
 		if requestBody != nil && bodyType == HTTP_REQ_BODYTYPE_FILE && bodyLen != 0 {
 			// Calculate and show progress of file uploading
@@ -1349,7 +1398,7 @@ func InvokeRestApi(httpClient *http.Client, method string, urlPath string, crede
 			case *os.File:
 				file := body.(*os.File)
 				if rb, err := os.Open(file.Name()); err != nil {
-					Fatal(CLI_INPUT_ERROR, msgPrinter.Sprintf("unable to open object file %v: %v", file.Name(), err))
+					return nil, CLIError{StatusCode: CLI_INPUT_ERROR, Message: msgPrinter.Sprintf("unable to open object file %v: %v", file.Name(), err)}
 				} else {
 					requestBody = rb
 				}
@@ -1359,7 +1408,7 @@ func InvokeRestApi(httpClient *http.Client, method string, urlPath string, crede
 		// Create the request and run it
 		req, err := http.NewRequest(method, urlObj.String(), requestBody)
 		if err != nil {
-			Fatal(HTTP_ERROR, msgPrinter.Sprintf("%s new request failed: %v", apiMsg, err))
+			return nil, CLIError{StatusCode: HTTP_ERROR, Message: msgPrinter.Sprintf("%s new request failed: %v", apiMsg, err)}
 		}
 
 		req.Close = true
@@ -1402,19 +1451,149 @@ func InvokeRestApi(httpClient *http.Client, method string, urlPath string, crede
 				time.Sleep(time.Duration(retryInterval) * time.Second)
 				continue
 			} else {
-				Fatal(HTTP_ERROR, msgPrinter.Sprintf("Encountered HTTP error: %v calling %v REST API %v. HTTP status: %v.", err, service, apiMsg, http_status))
+				return nil, CLIError{StatusCode: HTTP_ERROR, Message: msgPrinter.Sprintf("Encountered HTTP error: %v calling %v REST API %v. HTTP status: %v.", err, service, apiMsg, http_status)}
 			}
 		} else if err != nil {
 			printHorizonServiceRestError(service, apiMsg, err)
 		} else {
-			return resp
+			return resp, nil
 		}
+	}
+}
+
+type ServiceHandler interface {
+	Get(string, string, interface{}) (int, error)
+	Put(string, string, interface{}, interface{}) (int, error)
+	Post(string, string, interface{}, interface{}) (int, error)
+	Patch(string, string, interface{}, interface{}) (int, error)
+	Delete(string, string) (int, error)
+}
+
+type ExchangeHandler struct {
+	ServiceHandler
+}
+
+func (e ExchangeHandler) Get(url, credentials string, structure interface{}) (httpCode int, err error) {
+	if exUrl, exErr := GetExchangeUrl(); err != nil {
+		err = exErr
+		return
+	} else {
+		return exchangeGet("Exchange", exUrl, url, credentials, []int{200, 404}, structure)
+	}
+}
+
+func (e ExchangeHandler) Put(url, credentials string, body interface{}, structure interface{}) (httpCode int, err error) {
+	if exUrl, exErr := GetExchangeUrl(); err != nil {
+		err = exErr
+		return
+	} else {
+		return exchangePutPost("Exchange", http.MethodPut, exUrl, url, credentials, []int{201, 404}, body, structure)
+	}
+}
+
+func (e ExchangeHandler) Post(url, credentials string, body interface{}, structure interface{}) (httpCode int, err error) {
+	if exUrl, exErr := GetExchangeUrl(); err != nil {
+		err = exErr
+		return
+	} else {
+		return exchangePutPost("Exchange", http.MethodPost, exUrl, url, credentials, []int{201, 403}, body, structure)
+	}
+}
+
+func (e ExchangeHandler) Patch(url, credentials string, body interface{}, structure interface{}) (httpCode int, err error) {
+	if exUrl, exErr := GetExchangeUrl(); err != nil {
+		err = exErr
+		return
+	} else {
+		return exchangePutPost("Exchange", http.MethodPatch, exUrl, url, credentials, []int{201}, body, structure)
+	}
+}
+
+func (e ExchangeHandler) Delete(url, credentials string) (httpCode int, err error) {
+	if exUrl, exErr := GetExchangeUrl(); err != nil {
+		err = exErr
+		return
+	} else {
+		return exchangeDelete("Exchange", exUrl, url, credentials, []int{204, 404})
+	}
+}
+
+type AgbotHandler struct {
+	ServiceHandler
+}
+
+func (a AgbotHandler) Get(url, credentials string, structure interface{}) (httpCode int, err error) {
+	return agbotGet(url, credentials, []int{200, 404}, structure)
+}
+
+func (a AgbotHandler) Put(url, credentials string, body interface{}, structure interface{}) (httpCode int, err error) {
+	return agbotPutPost(http.MethodPut, url, credentials, []int{201, 404}, body, structure)
+}
+
+func (a AgbotHandler) Post(url, credentials string, body interface{}, structure interface{}) (httpCode int, err error) {
+	return agbotPutPost(http.MethodPost, url, credentials, []int{201, 403}, body, structure)
+}
+
+func (a AgbotHandler) Patch(url, credentials string, body interface{}, structure interface{}) (httpCode int, err error) {
+	return agbotPutPost(http.MethodPatch, url, credentials, []int{201}, body, structure)
+}
+
+func (a AgbotHandler) Delete(url, credentials string) (httpCode int, err error) {
+	return agbotDelete(url, credentials, []int{204, 404})
+}
+
+type MMSHandler struct {
+	ServiceHandler
+}
+
+func (m MMSHandler) Get(url, credentials string, structure interface{}) (httpCode int, err error) {
+	if mmsUrl, mmsErr := GetMMSUrl(); err != nil {
+		err = mmsErr
+		return
+	} else {
+		return exchangeGet("Model Management Service", mmsUrl, url, credentials, []int{200, 404}, structure)
+	}
+}
+
+func (m MMSHandler) Put(url, credentials string, body interface{}, structure interface{}) (httpCode int, err error) {
+	if mmsUrl, mmsErr := GetMMSUrl(); err != nil {
+		err = mmsErr
+		return
+	} else {
+		return exchangePutPost("Model Management Service", http.MethodPut, mmsUrl, url, credentials, []int{201, 404}, body, structure)
+	}
+}
+
+func (m MMSHandler) Post(url, credentials string, body interface{}, structure interface{}) (httpCode int, err error) {
+	if mmsUrl, mmsErr := GetMMSUrl(); err != nil {
+		err = mmsErr
+		return
+	} else {
+		return exchangePutPost("Model Management Service", http.MethodPost, mmsUrl, url, credentials, []int{201, 403}, body, structure)
+	}
+}
+
+func (m MMSHandler) Patch(url, credentials string, body interface{}, structure interface{}) (httpCode int, err error) {
+	if mmsUrl, mmsErr := GetMMSUrl(); err != nil {
+		err = mmsErr
+		return
+	} else {
+		return exchangePutPost("Model Management Service", http.MethodPatch, mmsUrl, url, credentials, []int{201}, body, structure)
+	}
+}
+
+func (m MMSHandler) Delete(url, credentials string) (httpCode int, err error) {
+	if mmsUrl, mmsErr := GetMMSUrl(); err != nil {
+		err = mmsErr
+		return
+	} else {
+		return exchangeDelete("Model Management Service", mmsUrl, url, credentials, []int{204, 404})
 	}
 }
 
 // ExchangeGet runs a GET to the specified service api and fills in the specified json structure. If the structure is just a string, fill in the raw json.
 // If the list of goodHttpCodes is not empty and none match the actual http code, it will exit with an error. Otherwise the actual code is returned.
-func ExchangeGet(service string, urlBase string, urlSuffix string, credentials string, goodHttpCodes []int, structure interface{}) (httpCode int) {
+func exchangeGet(service string, urlBase string, urlSuffix string, credentials string, goodHttpCodes []int, structure interface{}) (httpCode int, returnErr error) {
 	url := urlBase + "/" + urlSuffix
 	apiMsg := http.MethodGet + " " + url
 
@@ -1425,7 +1604,12 @@ func ExchangeGet(service string, urlBase string, urlSuffix string, credentials s
 
 	httpClient := GetHTTPClient(config.HTTPRequestTimeoutS)
 
-	resp := InvokeRestApi(httpClient, http.MethodGet, url, credentials, nil, service, apiMsg)
+	resp, err := InvokeRestApi(httpClient, http.MethodGet, url, credentials, nil, service, apiMsg)
+	if err != nil {
+		returnErr = err
+		return
+	}
+
 	if resp.Body != nil {
 		defer resp.Body.Close()
 	}
@@ -1451,12 +1635,14 @@ func ExchangeGet(service string, urlBase string, urlSuffix string, credentials s
 
 	bodyBytes, err := ioutil.ReadAll(respBody)
 	if err != nil {
-		Fatal(HTTP_ERROR, msgPrinter.Sprintf("failed to read body response from %s: %v", apiMsg, err))
+		returnErr = CLIError{StatusCode: HTTP_ERROR, Message: msgPrinter.Sprintf("failed to read body response from %s: %v", apiMsg, err)}
+		return
 	}
 	httpCode = resp.StatusCode
 	Verbose(msgPrinter.Sprintf("HTTP code: %d", httpCode))
 	if !isGoodCode(httpCode, goodHttpCodes) {
-		Fatal(HTTP_ERROR, msgPrinter.Sprintf("bad HTTP code %d from %s, output: %s", httpCode, apiMsg, string(bodyBytes)))
+		returnErr = CLIError{StatusCode: HTTP_ERROR, Message: msgPrinter.Sprintf("bad HTTP code %d from %s, output: %s", httpCode, apiMsg, string(bodyBytes))}
+		return
 	}
 
 	if len(bodyBytes) > 0 && structure != nil { // the DP front-end of exchange will return nothing when auth problem
@@ -1470,17 +1656,20 @@ func ExchangeGet(service string, urlBase string, urlSuffix string, credentials s
 			var jsonStruct interface{}
 			err = json.Unmarshal(bodyBytes, &jsonStruct)
 			if err != nil {
-				Fatal(JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal exchange body response from %s: %v", apiMsg, err))
+				returnErr = CLIError{StatusCode: JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to unmarshal exchange body response from %s: %v", apiMsg, err)}
+				return
 			}
 			jsonBytes, err := json.MarshalIndent(jsonStruct, "", JSON_INDENT)
 			if err != nil {
-				Fatal(JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal exchange output from %s: %v", apiMsg, err))
+				returnErr = CLIError{StatusCode: JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal exchange output from %s: %v", apiMsg, err)}
+				return
 			}
 			*s = string(jsonBytes)
 		default:
 			err = json.Unmarshal(bodyBytes, structure)
 			if err != nil {
-				Fatal(JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal exchange body response from %s: %v", apiMsg, err))
+				returnErr = CLIError{StatusCode: JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to unmarshal exchange body response from %s: %v", apiMsg, err)}
+				return
 			}
 		}
 	}
@@ -1488,7 +1677,7 @@ func ExchangeGet(service string, urlBase string, urlSuffix string, credentials s
 }
 
 // This function will return response directly, the resp need to be closed by caller
-func ExchangeGetResponse(service string, urlBase string, urlSuffix string, credentials string) *http.Response {
+func ExchangeGetResponse(service string, urlBase string, urlSuffix string, credentials string) (*http.Response, error) {
 	url := urlBase + "/" + urlSuffix
 	apiMsg := http.MethodGet + " " + url
 
@@ -1496,14 +1685,17 @@ func ExchangeGetResponse(service string, urlBase string, urlSuffix string, crede
 
 	httpClient := GetHTTPClient(config.HTTPRequestTimeoutS)
 
-	resp := InvokeRestApi(httpClient, http.MethodGet, url, credentials, nil, service, apiMsg)
-	return resp
+	if resp, err := InvokeRestApi(httpClient, http.MethodGet, url, credentials, nil, service, apiMsg); err != nil {
+		return nil, err
+	} else {
+		return resp, nil
+	}
 }
 
 // ExchangePutPost runs a PUT, POST or PATCH to the exchange api to create of update a resource. If body is a string, it will be given to the exchange
 // as json. Otherwise the struct will be marshaled to json.
 // If the list of goodHttpCodes is not empty and none match the actual http code, it will exit with an error. Otherwise the actual code is returned.
-func ExchangePutPost(service string, method string, urlBase string, urlSuffix string, credentials string, goodHttpCodes []int, body interface{}, structure interface{}) (httpCode int) {
+func exchangePutPost(service string, method string, urlBase string, urlSuffix string, credentials string, goodHttpCodes []int, body interface{}, structure interface{}) (httpCode int, returnErr error) {
 	url := urlBase + "/" + urlSuffix
 	apiMsg := method + " " + url
 
@@ -1512,11 +1704,16 @@ func ExchangePutPost(service string, method string, urlBase string, urlSuffix st
 
 	Verbose(apiMsg)
 	if IsDryRun() {
-		return 201
+		return 201, nil
 	}
 
 	httpClient := GetHTTPClient(config.HTTPRequestTimeoutS)
-	resp := InvokeRestApi(httpClient, method, url, credentials, body, service, apiMsg)
+	resp, err := InvokeRestApi(httpClient, method, url, credentials, body, service, apiMsg)
+	if err != nil {
+		returnErr = err
+		return
+	}
+
 	if resp.Body != nil {
 		defer resp.Body.Close()
 	}
@@ -1525,14 +1722,17 @@ func ExchangePutPost(service string, method string, urlBase string, urlSuffix st
 	bodyBytes, err := ioutil.ReadAll(resp.Body)
 	if !isGoodCode(httpCode, goodHttpCodes) {
 		if err != nil {
-			Fatal(HTTP_ERROR, msgPrinter.Sprintf("failed to read exchange body response from %s: %v", apiMsg, err))
+			returnErr = CLIError{StatusCode: HTTP_ERROR, Message: msgPrinter.Sprintf("failed to read exchange body response from %s: %v", apiMsg, err)}
+			return
 		}
 		respMsg := exchange.PostDeviceResponse{}
 		err = json.Unmarshal(bodyBytes, &respMsg)
 		if err != nil {
-			Fatal(HTTP_ERROR, msgPrinter.Sprintf("bad HTTP code %d from %s: %s", httpCode, apiMsg, string(bodyBytes)))
+			returnErr = CLIError{StatusCode: HTTP_ERROR, Message: msgPrinter.Sprintf("bad HTTP code %d from %s: %s", httpCode, apiMsg, string(bodyBytes))}
+			return
 		}
-		Fatal(HTTP_ERROR, msgPrinter.Sprintf("bad HTTP code %d from %s: %s, %s", httpCode, apiMsg, respMsg.Code, respMsg.Msg))
+		returnErr = CLIError{StatusCode: HTTP_ERROR, Message: msgPrinter.Sprintf("bad HTTP code %d from %s: %s, %s", httpCode, apiMsg, respMsg.Code, respMsg.Msg)}
+		return
 	} else if len(bodyBytes) > 0 && structure != nil { // the DP front-end of exchange will return nothing when auth problem
 		switch s := structure.(type) {
 		case *[]byte:
@@ -1544,17 +1744,20 @@ func ExchangePutPost(service string, method string, urlBase string, urlSuffix st
 			var jsonStruct interface{}
 			err = json.Unmarshal(bodyBytes, &jsonStruct)
 			if err != nil {
-				Fatal(JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal exchange body response from %s: %v", apiMsg, err))
+				returnErr = CLIError{StatusCode: JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to unmarshal exchange body response from %s: %v", apiMsg, err)}
+				return
 			}
 			jsonBytes, err := json.MarshalIndent(jsonStruct, "", JSON_INDENT)
 			if err != nil {
-				Fatal(JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal exchange output from %s: %v", apiMsg, err))
+				returnErr = CLIError{StatusCode: JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal exchange output from %s: %v", apiMsg, err)}
+				return
 			}
 			*s = string(jsonBytes)
 		default:
 			err = json.Unmarshal(bodyBytes, structure)
 			if err != nil {
-				Fatal(JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal exchange body response from %s: %v", apiMsg, err))
+				returnErr = CLIError{StatusCode: JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to unmarshal exchange body response from %s: %v", apiMsg, err)}
+				return
 			}
 		}
 	}
@@ -1564,7 +1767,7 @@ func ExchangePutPost(service string, method string, urlBase string, urlSuffix st
 
 // ExchangeDelete deletes a resource via the exchange api.
 // If the list of goodHttpCodes is not empty and none match the actual http code, it will exit with an error. Otherwise the actual code is returned.
-func ExchangeDelete(service string, urlBase string, urlSuffix string, credentials string, goodHttpCodes []int) (httpCode int) {
+func exchangeDelete(service string, urlBase string, urlSuffix string, credentials string, goodHttpCodes []int) (httpCode int, returnErr error) {
 	url := urlBase + "/" + urlSuffix
 	apiMsg := http.MethodDelete + " " + url
 
@@ -1573,12 +1776,17 @@ func ExchangeDelete(service string, urlBase string, urlSuffix string, credential
 
 	Verbose(apiMsg)
 	if IsDryRun() {
-		return 204
+		return 204, nil
 	}
 
 	httpClient := GetHTTPClient(config.HTTPRequestTimeoutS)
 
-	resp := InvokeRestApi(httpClient, http.MethodDelete, url, credentials, nil, service, apiMsg)
+	resp, err := InvokeRestApi(httpClient, http.MethodDelete, url, credentials, nil, service, apiMsg)
+	if err != nil {
+		returnErr = err
+		return
+	}
+
 	if resp.Body != nil {
 		defer resp.Body.Close()
 	}
@@ -1587,7 +1795,8 @@ func ExchangeDelete(service string, urlBase string, urlSuffix string, credential
 	httpCode = resp.StatusCode
 	Verbose(msgPrinter.Sprintf("HTTP code: %d", httpCode))
 	if !isGoodCode(httpCode, goodHttpCodes) {
-		Fatal(HTTP_ERROR, msgPrinter.Sprintf("bad HTTP code %d from %s", httpCode, apiMsg))
+		returnErr = CLIError{StatusCode: HTTP_ERROR, Message: msgPrinter.Sprintf("bad HTTP code %d from %s", httpCode, apiMsg)}
+		return
 	}
 	return
 }
@@ -1601,7 +1810,7 @@ func ConvertTime(unixSeconds uint64) string {
 
 // find correct credentials to use. Use -u or -n if one of them is not empty.
 // If both are empty, use HZN_EXCHANGE_USER_AUTH first, if it is not set use HZN_EXCHANGE_NODE_AUTH.
-func GetExchangeAuth(userPw string, nodeIdTok string) string {
+func GetExchangeAuth(userPw string, nodeIdTok string) (string, error) {
 	credToUse := ""
 
 	if userPw != "" {
@@ -1619,10 +1828,10 @@ func GetExchangeAuth(userPw string, nodeIdTok string) string {
 	}
 
 	if credToUse == "" {
-		Fatal(CLI_INPUT_ERROR, i18n.GetMessagePrinter().Sprintf("exchange authentication must be specified with one of the following: the -u flag, the -n flag, HZN_EXCHANGE_USER_AUTH or HZN_EXCHANGE_NODE_AUTH"))
+		return "", CLIError{StatusCode: CLI_INPUT_ERROR, Message: i18n.GetMessagePrinter().Sprintf("exchange authentication must be specified with one of the following: the -u flag, the -n flag, HZN_EXCHANGE_USER_AUTH or HZN_EXCHANGE_NODE_AUTH")}
 	}
 
-	return credToUse
+	return credToUse, nil
 }
 
 // Find correct credentials to use. Use -u first.
@@ -1641,30 +1850,36 @@ func GetExchangeAuthVersion(userPw string) string {
 }
 
 // set env variable ARCH if it is not set
-func SetDefaultArch() {
+func SetDefaultArch() error {
 	arch := os.Getenv("ARCH")
 	if arch == "" {
 		if err := os.Setenv("ARCH", runtime.GOARCH); err != nil {
-			Fatal(CLI_GENERAL_ERROR, err.Error())
+			return CLIError{StatusCode: CLI_GENERAL_ERROR, Message: err.Error()}
 		}
 	}
+	return nil
 }
 
-func GetAndVerifyPublicKey(pubKeyFilePath string) string {
+func GetAndVerifyPublicKey(pubKeyFilePath string) (string, error) {
 	msgPrinter := i18n.GetMessagePrinter()
 	msgPrinter.Printf("Verifying public key file ... ")
 	msgPrinter.Println()
 
+	var err error
+
 	pubKeyFilePath_tmp := WithDefaultEnvVar(&pubKeyFilePath, "HZN_PUBLIC_KEY_FILE")
-	pubKeyFilePath = VerifySigningKeyInput(*pubKeyFilePath_tmp, true)
-	inBytes := ReadFile(pubKeyFilePath)
-	if _, err := verify.ValidKeyOrCert(inBytes); err != nil {
-		Fatal(CLI_INPUT_ERROR, msgPrinter.Sprintf("provided public key is not valid; error: %v", err))
+	if pubKeyFilePath, err = VerifySigningKeyInput(*pubKeyFilePath_tmp, true); err != nil {
+		return "", err
 	}
-	return pubKeyFilePath
+	if inBytes, err := ReadFile(pubKeyFilePath); err != nil {
+		return "", err
+	} else if _, err := verify.ValidKeyOrCert(inBytes); err != nil {
+		return "", CLIError{StatusCode: CLI_INPUT_ERROR, Message: msgPrinter.Sprintf("provided public key is not valid; error: %v", err)}
+	}
+	return pubKeyFilePath, nil
 }
 
-func getPrivateKeyFromFile(keyFile string) *rsa.PrivateKey {
+func getPrivateKeyFromFile(keyFile string) (*rsa.PrivateKey, error) {
 	msgPrinter := i18n.GetMessagePrinter()
 	msgPrinter.Printf("Checking private key file format ... ")
 	msgPrinter.Println()
@@ -1672,10 +1887,10 @@ func getPrivateKeyFromFile(keyFile string) *rsa.PrivateKey {
 	var privKey *rsa.PrivateKey
 	var err error
 	if privKey, err = sign.ReadPrivateKey(keyFile); err != nil {
-		Fatal(CLI_INPUT_ERROR, msgPrinter.Sprintf("provided private key %v is not valid; error: %v", keyFile, err))
+		return nil, CLIError{StatusCode: CLI_INPUT_ERROR, Message: msgPrinter.Sprintf("provided private key %v is not valid; error: %v", keyFile, err)}
 	}
 
-	return privKey
+	return privKey, nil
 }
 
 // get the default private or public key file name
@@ -1708,58 +1923,65 @@ func GetDeprecatedDefaultSigningKeyFile(isPublic bool) (string, error) {
 }
 
 // Gets default keys if not set, verify key files exist.
-func VerifySigningKeyInput(keyFile string, isPublic bool) string {
-	keyFile = verifySigningKeyInputHelper(keyFile, isPublic, false)
-	if _, err := os.Stat(keyFile); os.IsNotExist(err) {
-		keyFile = verifySigningKeyInputHelper(keyFile, isPublic, true)
-		if _, err := os.Stat(keyFile); os.IsNotExist(err) {
-			Fatal(CLI_GENERAL_ERROR, i18n.GetMessagePrinter().Sprintf("%v. Please create the signing key.", err))
+func VerifySigningKeyInput(keyFile string, isPublic bool) (string, error) {
+	var err error
+	if keyFile, err = verifySigningKeyInputHelper(keyFile, isPublic, false); err != nil {
+		return "", err
+	} else if _, err := os.Stat(keyFile); os.IsNotExist(err) {
+		if keyFile, err = verifySigningKeyInputHelper(keyFile, isPublic, true); err != nil {
+			return "", err
+		} else if _, err := os.Stat(keyFile); os.IsNotExist(err) {
+			return "", CLIError{StatusCode: CLI_GENERAL_ERROR, Message: i18n.GetMessagePrinter().Sprintf("%v. Please create the signing key.", err)}
 		}
 	}
 
-	return keyFile
+	return keyFile, nil
 }
 
-func verifySigningKeyInputHelper(keyFile string, isPublic, usingDeprecated bool) string {
+func verifySigningKeyInputHelper(keyFile string, isPublic, usingDeprecated bool) (string, error) {
 	var err error
 	// get default file names if input is empty
 	if keyFile == "" {
 		if usingDeprecated {
 			if keyFile, err = GetDeprecatedDefaultSigningKeyFile(isPublic); err != nil {
-				Fatal(CLI_GENERAL_ERROR, err.Error())
+				return "", CLIError{StatusCode: CLI_GENERAL_ERROR, Message: err.Error()}
 			}
 		} else {
 			if keyFile, err = GetDefaultSigningKeyFile(isPublic); err != nil {
-				Fatal(CLI_GENERAL_ERROR, err.Error())
+				return "", CLIError{StatusCode: CLI_GENERAL_ERROR, Message: err.Error()}
 			}
 		}
 	}
 
 	// convert to absolute path
 	if keyFile, err = filepath.Abs(keyFile); err != nil {
-		Fatal(CLI_GENERAL_ERROR, i18n.GetMessagePrinter().Sprintf("Failed to get absolute path for file %v. %v", keyFile, err))
+		return "", CLIError{StatusCode: CLI_GENERAL_ERROR, Message: i18n.GetMessagePrinter().Sprintf("Failed to get absolute path for file %v. %v", keyFile, err)}
 	}
 
-	return keyFile
+	return keyFile, nil
 }
 
 // get default keys if needed and verify them.
 // this function is used by `hzn exchange pattern/service publish
-func GetSigningKeys(privKeyFilePath, pubKeyFilePath string) (*rsa.PrivateKey, []byte, string) {
+func GetSigningKeys(privKeyFilePath, pubKeyFilePath string) (*rsa.PrivateKey, []byte, string, error) {
 
 	var err error
 
 	// Get default private key if -k not specified
 	var privKey *rsa.PrivateKey
 	privKeyFilePath_tmp := WithDefaultEnvVar(&privKeyFilePath, "HZN_PRIVATE_KEY_FILE")
-	privKeyFilePath = WithDefaultKeyFile(*privKeyFilePath_tmp, false)
+	if privKeyFilePath, err = WithDefaultKeyFile(*privKeyFilePath_tmp, false); err != nil {
+		return nil, nil, "", err
+	}
 
 	// if a valid private key was given or found at default location, load it
 	if privKeyFilePath != "" {
-		privKey = getPrivateKeyFromFile(privKeyFilePath)
+		if privKey, err = getPrivateKeyFromFile(privKeyFilePath); err != nil {
+			return nil, nil, "", err
+		}
 		// otherwise, generate a random key
 	} else if privKey, err = rsa.GenerateKey(rand.Reader, 2048); err != nil {
-		Fatal(CLI_GENERAL_ERROR, i18n.GetMessagePrinter().Sprintf("private key could not be generated; error: %v", err))
+		return nil, nil, "", CLIError{StatusCode: CLI_GENERAL_ERROR, Message: i18n.GetMessagePrinter().Sprintf("private key could not be generated; error: %v", err)}
 	}
 
 	// Load in public key, if given
@@ -1768,13 +1990,17 @@ func GetSigningKeys(privKeyFilePath, pubKeyFilePath string) (*rsa.PrivateKey, []
 	// get default public key
 	if pubKeyFilePath != "" {
 		publicKeyName = filepath.Base(pubKeyFilePath)
-		pubKeyFilePath = GetAndVerifyPublicKey(pubKeyFilePath)
-		pubKeyBytes = ReadFile(pubKeyFilePath)
+		if pubKeyFilePath, err = GetAndVerifyPublicKey(pubKeyFilePath); err != nil {
+			return nil, nil, "", err
+		}
+		if pubKeyBytes, err = ReadFile(pubKeyFilePath); err != nil {
+			return nil, nil, "", err
+		}
 	} else {
 		// calculate public key from private key
 		pubKeyBytes, err = x509.MarshalPKIXPublicKey(&privKey.PublicKey)
 		if err != nil {
-			Fatal(CLI_GENERAL_ERROR, i18n.GetMessagePrinter().Sprintf("%v. Public key could not be generated."))
+			return nil, nil, "", CLIError{StatusCode: CLI_GENERAL_ERROR, Message: i18n.GetMessagePrinter().Sprintf("%v. Public key could not be generated.")}
 		}
 		// format public key
 		pubEnc := &pem.Block{
@@ -1784,11 +2010,11 @@ func GetSigningKeys(privKeyFilePath, pubKeyFilePath string) (*rsa.PrivateKey, []
 		}
 		pubKeyBytes = pem.EncodeToMemory(pubEnc)
 	}
-	return privKey, pubKeyBytes, publicKeyName
+	return privKey, pubKeyBytes, publicKeyName, nil
 }
 
 // Run a command with optional stdin and args, and return stdout, stderr
-func RunCmd(stdinBytes []byte, commandString string, args ...string) ([]byte, []byte) {
+func RunCmd(stdinBytes []byte, commandString string, args ...string) ([]byte, []byte, error) {
 
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
@@ -1806,7 +2032,7 @@ func RunCmd(stdinBytes []byte, commandString string, args ...string) ([]byte, []
 	// Create the command object with its args
 	cmd := exec.Command(commandString, args...)
 	if cmd == nil {
-		Fatal(EXEC_CMD_ERROR, msgPrinter.Sprintf("did not get a command object"))
+		return nil, nil, CLIError{StatusCode: EXEC_CMD_ERROR, Message: msgPrinter.Sprintf("did not get a command object")}
 	}
 
 	var stdin io.WriteCloser
@@ -1816,39 +2042,39 @@ func RunCmd(stdinBytes []byte, commandString string, args ...string) ([]byte, []
 		// Create the std in pipe
 		stdin, err = cmd.StdinPipe()
 		if err != nil {
-			Fatal(EXEC_CMD_ERROR, msgPrinter.Sprintf("Could not get Stdin pipe, error: %v", err))
+			return nil, nil, CLIError{StatusCode: EXEC_CMD_ERROR, Message: msgPrinter.Sprintf("Could not get Stdin pipe, error: %v", err)}
 		}
 		// Read the input file
 		//jInbytes, err = ioutil.ReadFile(stdinFilename)
-		//if err != nil { Fatal(EXEC_CMD_ERROR,"Unable to read " + stdinFilename + " file, error: %v", err) }
+		//if err != nil { return nil, nil, CLIError{StatusCode: EXEC_CMD_ERROR, Message: "Unable to read " + stdinFilename + " file, error: %v", err} }
 	}
 	// Create the stdout pipe to hold the output from the command
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		Fatal(EXEC_CMD_ERROR, msgPrinter.Sprintf("could not retrieve output from command, error: %v", err))
+		return nil, nil, CLIError{StatusCode: EXEC_CMD_ERROR, Message: msgPrinter.Sprintf("could not retrieve output from command, error: %v", err)}
 	}
 	// Create the stderr pipe to hold the errors from the command
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		Fatal(EXEC_CMD_ERROR, msgPrinter.Sprintf("could not retrieve stderr from command, error: %v", err))
+		return nil, nil, CLIError{StatusCode: EXEC_CMD_ERROR, Message: msgPrinter.Sprintf("could not retrieve stderr from command, error: %v", err)}
 	}
 
 	// Start the command, which will block for input from stdin if the cmd reads from it
 	err = cmd.Start()
 	if err != nil {
-		Fatal(EXEC_CMD_ERROR, msgPrinter.Sprintf("Unable to start command, error: %v", err))
+		return nil, nil, CLIError{StatusCode: EXEC_CMD_ERROR, Message: msgPrinter.Sprintf("Unable to start command, error: %v", err)}
 	}
 
 	if stdinBytes != nil {
 		// Send in the std in bytes
 		_, err = stdin.Write(stdinBytes)
 		if err != nil {
-			Fatal(EXEC_CMD_ERROR, msgPrinter.Sprintf("Unable to write to stdin of command, error: %v", err))
+			return nil, nil, CLIError{StatusCode: EXEC_CMD_ERROR, Message: msgPrinter.Sprintf("Unable to write to stdin of command, error: %v", err)}
 		}
 		// Close std in so that the command will begin to execute
 		err = stdin.Close()
 		if err != nil {
-			Fatal(EXEC_CMD_ERROR, msgPrinter.Sprintf("Unable to close stdin, error: %v", err))
+			return nil, nil, CLIError{StatusCode: EXEC_CMD_ERROR, Message: msgPrinter.Sprintf("Unable to close stdin, error: %v", err)}
 		}
 	}
 
@@ -1857,21 +2083,21 @@ func RunCmd(stdinBytes []byte, commandString string, args ...string) ([]byte, []
 	// stdoutBytes, err := readPipe(stdout)
 	stdoutBytes, err := ioutil.ReadAll(stdout)
 	if err != nil {
-		Fatal(EXEC_CMD_ERROR, msgPrinter.Sprintf("could not read stdout, error: %v", err))
+		return nil, nil, CLIError{StatusCode: EXEC_CMD_ERROR, Message: msgPrinter.Sprintf("could not read stdout, error: %v", err)}
 	}
 	// stderrBytes, err := readPipe(stderr)
 	stderrBytes, err := ioutil.ReadAll(stderr)
 	if err != nil {
-		Fatal(EXEC_CMD_ERROR, msgPrinter.Sprintf("could not read stderr, error: %v", err))
+		return nil, nil, CLIError{StatusCode: EXEC_CMD_ERROR, Message: msgPrinter.Sprintf("could not read stderr, error: %v", err)}
 	}
 
 	// Now block waiting for the command to complete
 	err = cmd.Wait()
 	if err != nil {
-		Fatal(EXEC_CMD_ERROR, msgPrinter.Sprintf("command failed: %v, stderr: %s", err, string(stderrBytes)))
+		return nil, nil, CLIError{StatusCode: EXEC_CMD_ERROR, Message: msgPrinter.Sprintf("command failed: %v, stderr: %s", err, string(stderrBytes))}
 	}
 
-	return stdoutBytes, stderrBytes
+	return stdoutBytes, stderrBytes, nil
 }
 
 // display a data structure as json format. Unescape the <, >, and & etc.
@@ -1942,30 +2168,45 @@ func GetHTTPClient(timeout int) *http.Client {
 }
 
 // create the exchange context with the given user credentail
-func GetUserExchangeContext(userOrg string, credToUse string) exchange.ExchangeContext {
+func GetUserExchangeContext(userOrg string, credToUse string) (exchange.ExchangeContext, error) {
 	var ec exchange.ExchangeContext
+	var err error
 	if credToUse != "" {
 		cred, token := SplitIdToken(credToUse)
 		if userOrg != "" {
-			cred = AddOrg(userOrg, cred)
+			if cred, err = AddOrg(userOrg, cred); err != nil {
+				return nil, err
+			}
 		}
-		ec = CreateUserExchangeContext(cred, token)
+		if ec, err = CreateUserExchangeContext(cred, token); err != nil {
+			return nil, err
+		}
 	} else {
-		ec = CreateUserExchangeContext("", "")
+		if ec, err = CreateUserExchangeContext("", ""); err != nil {
+			return nil, err
+		}
 	}
 
-	return ec
+	return ec, nil
 }
 
 // create an exchange context based on the user Id and password.
-func CreateUserExchangeContext(userId string, passwd string) exchange.ExchangeContext {
+func CreateUserExchangeContext(userId string, passwd string) (exchange.ExchangeContext, error) {
 	// GetExchangeUrl trims the last slash, we need to add it back for the exchange API calls.
-	exchUrl := GetExchangeUrl() + "/"
-	return exchange.NewCustomExchangeContext(userId, passwd, exchUrl, "", NewHTTPClientFactory())
+	if exchUrl, err := GetExchangeUrl(); err != nil {
+		return nil, err
+	} else {
+		exchUrl += "/"
+		if httpFac, err := NewHTTPClientFactory(); err != nil {
+			return nil, err
+		} else {
+			return exchange.NewCustomExchangeContext(userId, passwd, exchUrl, "", httpFac), nil
+		}
+	}
 }
 
 // create an http client factory to be used for the exchange calls.
-func NewHTTPClientFactory() *config.HTTPClientFactory {
+func NewHTTPClientFactory() (*config.HTTPClientFactory, error) {
 	clientFunc := func(overrideTimeoutS *uint) *http.Client {
 		var timeoutS uint
 		if overrideTimeoutS != nil {
@@ -1985,14 +2226,14 @@ func NewHTTPClientFactory() *config.HTTPClientFactory {
 	// get retry count and retry interval from env
 	maxRetries, retryInterval, err := GetHttpRetryParameters(5, 2)
 	if err != nil {
-		Fatal(CLI_GENERAL_ERROR, err.Error())
+		return nil, CLIError{StatusCode: CLI_GENERAL_ERROR, Message: err.Error()}
 	}
 
 	return &config.HTTPClientFactory{
 		NewHTTPClient: clientFunc,
 		RetryCount:    maxRetries,
 		RetryInterval: retryInterval,
-	}
+	}, nil
 }
 
 // get the http retry count and interval from the env variables.
@@ -2023,7 +2264,7 @@ func GetHttpRetryParameters(default_count int, default_interval int) (int, int, 
 }
 
 // download http response body to outputFilePath if specified, otherwise, downloads to defaultFileName. Returns file path used.
-func DownloadToFile(outputFilePath, defaultFileName string, body []byte, extension string, permissions os.FileMode, overwrite bool) string {
+func DownloadToFile(outputFilePath, defaultFileName string, body []byte, extension string, permissions os.FileMode, overwrite bool) (string, error) {
 	msgPrinter := i18n.GetMessagePrinter()
 	var fileName string
 	// if no fileName and filePath specified, data will be saved in current dir, with name {defaultFileName}
@@ -2059,7 +2300,7 @@ func DownloadToFile(outputFilePath, defaultFileName string, body []byte, extensi
 
 	if !overwrite {
 		if _, err := os.Stat(fileName); !os.IsNotExist(err) {
-			Fatal(CLI_INPUT_ERROR, msgPrinter.Sprintf("File %s already exists. Please specify a different file path or file name. To overwrite the existing file, use the '--overwrite' flag.", fileName))
+			return "", CLIError{StatusCode: CLI_INPUT_ERROR, Message: msgPrinter.Sprintf("File %s already exists. Please specify a different file path or file name. To overwrite the existing file, use the '--overwrite' flag.", fileName)}
 		}
 	}
 
@@ -2071,10 +2312,10 @@ func DownloadToFile(outputFilePath, defaultFileName string, body []byte, extensi
 	body = []byte(bodyString)
 
 	if err := ioutil.WriteFile(fileName, body, permissions); err != nil {
-		Fatal(INTERNAL_ERROR, msgPrinter.Sprintf("Failed to save data for object '%s' to file %s, err: %v", defaultFileName, fileName, err))
+		return "", CLIError{StatusCode: INTERNAL_ERROR, Message: msgPrinter.Sprintf("Failed to save data for object '%s' to file %s, err: %v", defaultFileName, fileName, err)}
 	}
 
-	return fileName
+	return fileName, nil
 }
 
 /* Will probably need this....
@@ -2086,7 +2327,7 @@ func getString(v interface{}) string {
 
 // This function is used in the service publish command to pull the docker image.
 // It  the image name with the digest.
-func GetNewDockerImageName(image string, dontTouchImage bool, pullImage bool) string {
+func GetNewDockerImageName(image string, dontTouchImage bool, pullImage bool) (string, error) {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -2100,24 +2341,28 @@ func GetNewDockerImageName(image string, dontTouchImage bool, pullImage bool) st
 		// We are going to push images to the docker repo only if the user wants us to update the digest of the image.
 		if !dontTouchImage {
 			// Push it, get the repo digest, and modify the imagePath to use the digest.
-			client := NewDockerClient()
+			client, err := NewDockerClient()
+			if err != nil {
+				return "", err
+			}
 			digest := ""
-			var err error
 			if pullImage {
 				if digest, err = PullDockerImage(client, domain, path, tag); err != nil {
-					Fatal(CLI_GENERAL_ERROR, msgPrinter.Sprintf("Docker pull failure: %v", err))
+					return "", CLIError{StatusCode: CLI_GENERAL_ERROR, Message: msgPrinter.Sprintf("Docker pull failure: %v", err)}
 				}
 			} else {
-				digest = PushDockerImage(client, domain, path, tag) // this will error out if the push fails or can't get the digest
+				if digest, err = PushDockerImage(client, domain, path, tag); err != nil { // this will error out if the push fails or can't get the digest
+					return "", err
+				}
 			}
 			if domain != "" {
 				domain = domain + "/"
 			}
 			newImage := domain + path + "@" + digest
-			return newImage
+			return newImage, nil
 		}
 	}
-	return image
+	return image, nil
 }
 
 func LoggingDriverSupportsTagging(driverName string) bool {

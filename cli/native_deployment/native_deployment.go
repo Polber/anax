@@ -54,7 +54,10 @@ func (p *NativeDeploymentConfigPlugin) Sign(dep map[string]interface{}, privKey 
 		service := svc.(map[string]interface{})
 		image := service["image"].(string)
 
-		newImage := cliutils.GetNewDockerImageName(image, dontTouchImage, pullImage)
+		newImage, err := cliutils.GetNewDockerImageName(image, dontTouchImage, pullImage)
+		if err != nil {
+			return false, "", "", err
+		}
 		if newImage != image {
 			msgPrinter.Printf("Using '%s' in 'deployment' field instead of '%s'", newImage, image)
 			msgPrinter.Println()
@@ -95,7 +98,7 @@ func (p *NativeDeploymentConfigPlugin) GetContainerImages(dep interface{}) (bool
 
 	depConfig, err := common.ConvertToDeploymentConfig(dep, msgPrinter)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, err.Error())
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, err.Error())
 	}
 
 	for _, svc := range depConfig.Services {
@@ -151,7 +154,7 @@ func (p *NativeDeploymentConfigPlugin) Validate(dep interface{}, cdep interface{
 	} else {
 		depConfig, err1 := common.ConvertToDeploymentConfig(dep, msgPrinter)
 		if err1 != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, err1.Error())
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, err1.Error())
 		}
 
 		if err := depConfig.CanStartStop(); err != nil {
@@ -198,9 +201,9 @@ func CheckDeploymentService(svcName string, depSvc map[string]interface{}) error
 			// references out of the ports config value.
 			var pbs []dockerclient.PortBinding
 			if bytes, err := json.Marshal(depSvc[k]); err != nil {
-				cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("service '%s' defined under 'deployment.services' has a malformed ports value %v, error %v", svcName, depSvc[k], err))
+				return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("service '%s' defined under 'deployment.services' has a malformed ports value %v, error %v", svcName, depSvc[k], err))
 			} else if err := json.Unmarshal(bytes, &pbs); err != nil {
-				cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("service '%s' defined under 'deployment.services' has a malformed ports value %v, error %v", svcName, string(bytes), err))
+				return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("service '%s' defined under 'deployment.services' has a malformed ports value %v, error %v", svcName, string(bytes), err))
 			} else {
 				for _, pb := range pbs {
 					hostPort := containermessage.GetSpecificHostPort(pb.HostPort)
@@ -215,7 +218,7 @@ func CheckDeploymentService(svcName string, depSvc map[string]interface{}) error
 }
 
 // SignImagesFromDeploymentMap finds the images in this deployment structure (if any) and appends them to the imageList
-func SignImagesFromDeploymentMap(deployment map[string]interface{}, dontTouchImage bool) (imageList []string) {
+func SignImagesFromDeploymentMap(deployment map[string]interface{}, dontTouchImage bool) (imageList []string, retError error) {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -223,9 +226,10 @@ func SignImagesFromDeploymentMap(deployment map[string]interface{}, dontTouchIma
 	// Since we have to parse the deployment structure anyway, we do some validity checking while we are at it
 	// Note: in the code below we are exploiting the golang map feature that it returns the zero value when a key does not exist in the map.
 	if len(deployment) == 0 {
-		return imageList // an empty deployment structure is valid
+		return imageList, nil // an empty deployment structure is valid
 	}
 	var client *dockerclient.Client
+	var err error
 
 	if _, ok := deployment["chart_archive"]; ok {
 		// TODO: come back and fill this in.
@@ -238,7 +242,7 @@ func SignImagesFromDeploymentMap(deployment map[string]interface{}, dontTouchIma
 				switch s := svc.(type) {
 				case map[string]interface{}:
 					if err := CheckDeploymentService(k, s); err != nil {
-						cliutils.Fatal(cliutils.CLI_INPUT_ERROR, "%v", err)
+						return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, "%v", err)
 					}
 					switch image := s["image"].(type) {
 					case string:
@@ -254,9 +258,16 @@ func SignImagesFromDeploymentMap(deployment map[string]interface{}, dontTouchIma
 							} else {
 								// Push it, get the repo digest, and modify the imagePath to use the digest
 								if client == nil {
-									client = cliutils.NewDockerClient()
+									if client, err = cliutils.NewDockerClient(); err != nil {
+										retError = err
+										return
+									}
 								}
-								digest := cliutils.PushDockerImage(client, domain, path, tag) // this will error out if the push fails or can't get the digest
+								digest, err := cliutils.PushDockerImage(client, domain, path, tag) // this will error out if the push fails or can't get the digest
+								if err != nil {
+									retError = err
+									return
+								}
 								if domain != "" {
 									domain = domain + "/"
 								}
@@ -268,25 +279,29 @@ func SignImagesFromDeploymentMap(deployment map[string]interface{}, dontTouchIma
 						}
 					}
 				default:
-					cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("each service defined under 'deployment.services' must be a json object (with strings as the keys)"))
+					return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("each service defined under 'deployment.services' must be a json object (with strings as the keys)"))
 				}
 			}
 		default:
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("the 'deployment' field must contain the 'services' field, whose value must be a json object (with strings as the keys)"))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("the 'deployment' field must contain the 'services' field, whose value must be a json object (with strings as the keys)"))
 		}
 	} else {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("the 'deployment' field must contain either the native Horizon deployment config or the Helm deployment config, whose value must be a json object (with strings as the keys)"))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("the 'deployment' field must contain either the native Horizon deployment config or the Helm deployment config, whose value must be a json object (with strings as the keys)"))
 	}
-	return
+	return nil, nil
 }
 
 // Start the native deployment config in test mode. Only services are supported.
-func (p *NativeDeploymentConfigPlugin) StartTest(homeDirectory string, userInputFile string, configFiles []string, configType string, noFSS bool, userCreds string, secretsFiles map[string]string) bool {
+func (p *NativeDeploymentConfigPlugin) StartTest(homeDirectory string, userInputFile string, configFiles []string, configType string, noFSS bool, userCreds string, secretsFiles map[string]string, exchangeHandler cliutils.ServiceHandler) (bool, error) {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// Run verification before trying to start anything.
-	absConfigFiles := dev.ServiceValidate(homeDirectory, userInputFile, configFiles, configType, userCreds)
+	var err error
+	absConfigFiles, err := dev.ServiceValidate(homeDirectory, userInputFile, configFiles, configType, userCreds, exchangeHandler)
+	if err != nil {
+		return false, err
+	}
 
 	// Perform the common execution setup.
 	dir, userInputs, cw := dev.CommonExecutionSetup(homeDirectory, userInputFile, dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND)
@@ -294,12 +309,12 @@ func (p *NativeDeploymentConfigPlugin) StartTest(homeDirectory string, userInput
 	// Get the service definition, so that we can look at the user input variable definitions.
 	serviceDef, sderr := dev.GetServiceDefinition(dir, dev.SERVICE_DEFINITION_FILE)
 	if sderr != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, sderr)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, sderr)
 	}
 
 	// Now that we have the service def, we can check if we own the deployment config object.
 	if owned, err := p.Validate(serviceDef.Deployment, nil); !owned || err != nil {
-		return false
+		return false, nil
 	}
 
 	if !noFSS {
@@ -307,7 +322,7 @@ func (p *NativeDeploymentConfigPlugin) StartTest(homeDirectory string, userInput
 		sserr := sync_service.Start(cw, serviceDef.Org, absConfigFiles, configType)
 		if sserr != nil {
 			sync_service.Stop(cw.GetClient())
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' unable to start file sync service, %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, sserr))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' unable to start file sync service, %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, sserr))
 		}
 	}
 
@@ -318,7 +333,7 @@ func (p *NativeDeploymentConfigPlugin) StartTest(homeDirectory string, userInput
 		if !noFSS {
 			sync_service.Stop(cw.GetClient())
 		}
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' unable to get service dependencies, %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, derr))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' unable to get service dependencies, %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, derr))
 	}
 
 	// Log the starting of dependencies if there are any.
@@ -332,7 +347,7 @@ func (p *NativeDeploymentConfigPlugin) StartTest(homeDirectory string, userInput
 		if !noFSS {
 			sync_service.Stop(cw.GetClient())
 		}
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' unable to generate test agreementId, %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, aerr))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' unable to generate test agreementId, %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, aerr))
 	}
 
 	// If the service has dependencies, get them started first.
@@ -341,7 +356,7 @@ func (p *NativeDeploymentConfigPlugin) StartTest(homeDirectory string, userInput
 		if !noFSS {
 			sync_service.Stop(cw.GetClient())
 		}
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' unable to start service dependencies, %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, perr))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' unable to start service dependencies, %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, perr))
 	}
 
 	// Get the service's deployment description from the deployment config in the definition.
@@ -350,21 +365,21 @@ func (p *NativeDeploymentConfigPlugin) StartTest(homeDirectory string, userInput
 		if !noFSS {
 			sync_service.Stop(cw.GetClient())
 		}
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, cerr)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, cerr)
 	}
 
 	dev.AddServiceSecretBinds(deployment, secretsFiles)
 
 	// Now we can start the service container.
-	_, err := dev.StartContainers(deployment, serviceDef.URL, userInputs.Global, serviceDef.UserInputs, userInputs.Services, serviceDef.Org, dc, cw, msNetworks, true, true, agreementId)
+	_, err = dev.StartContainers(deployment, serviceDef.URL, userInputs.Global, serviceDef.UserInputs, userInputs.Services, serviceDef.Org, dc, cw, msNetworks, true, true, agreementId)
 	if err != nil {
 		if !noFSS {
 			sync_service.Stop(cw.GetClient())
 		}
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v.", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v.", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, err)
 	}
 
-	return true
+	return true, nil
 }
 
 // Stop the native deployment config in test mode. Only services are supported.
@@ -378,7 +393,7 @@ func (p *NativeDeploymentConfigPlugin) StopTest(homeDirectory string) bool {
 	// Get the service definition for this project.
 	serviceDef, wderr := dev.GetServiceDefinition(dir, dev.SERVICE_DEFINITION_FILE)
 	if wderr != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", dev.SERVICE_COMMAND, dev.SERVICE_STOP_COMMAND, wderr)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", dev.SERVICE_COMMAND, dev.SERVICE_STOP_COMMAND, wderr)
 	}
 
 	// Now that we have the service def, we can check if we own the deployment config object.
@@ -390,25 +405,25 @@ func (p *NativeDeploymentConfigPlugin) StopTest(homeDirectory string) bool {
 	// if it is managed by an agreement.
 	dc, _, cerr := serviceDef.ConvertToDeploymentDescription(true, msgPrinter)
 	if cerr != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", dev.SERVICE_COMMAND, dev.SERVICE_STOP_COMMAND, cerr)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", dev.SERVICE_COMMAND, dev.SERVICE_STOP_COMMAND, cerr)
 	}
 
 	// Stop the service.
 	err := dev.StopService(dc, cw)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", dev.SERVICE_COMMAND, dev.SERVICE_STOP_COMMAND, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", dev.SERVICE_COMMAND, dev.SERVICE_STOP_COMMAND, err)
 	}
 
 	// Get the metadata for each dependency. The metadata is returned as a list of service definition files from
 	// the project's dependency directory.
 	deps, derr := dev.GetServiceDependencies(dir, serviceDef.RequiredServices)
 	if derr != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' unable to get service dependencies, %v", dev.SERVICE_COMMAND, dev.SERVICE_STOP_COMMAND, derr))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' unable to get service dependencies, %v", dev.SERVICE_COMMAND, dev.SERVICE_STOP_COMMAND, derr))
 	}
 
 	// If the service has dependencies, stop them.
 	if err := dev.ProcessStopDependencies(dir, deps, cw); err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' unable to stop service dependencies, %v", dev.SERVICE_COMMAND, dev.SERVICE_STOP_COMMAND, err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' unable to stop service dependencies, %v", dev.SERVICE_COMMAND, dev.SERVICE_STOP_COMMAND, err))
 	}
 
 	// Perform the execution teardown.
@@ -417,7 +432,7 @@ func (p *NativeDeploymentConfigPlugin) StopTest(homeDirectory string) bool {
 	// Stop the file sync service infrastructure containers if any now that the service(s) are stopped.
 	sserr := sync_service.Stop(cw.GetClient())
 	if sserr != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' unable to stop file sync service, %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, sserr))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' unable to stop file sync service, %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, sserr))
 	}
 
 	msgPrinter.Printf("Stopped service.")

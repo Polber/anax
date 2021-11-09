@@ -91,9 +91,9 @@ func CreateWorkingDir(dir string) error {
 // we have several files that we're dealing with.
 func FileNotExist(dir string, cmd string, fileName string, check func(string) (bool, error)) {
 	if exists, err := check(dir); err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, "'%v' %v", cmd, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, "'%v' %v", cmd, err)
 	} else if exists {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, "'%v' %v", cmd, i18n.GetMessagePrinter().Sprintf("horizon project in %v already contains %v.", dir, fileName))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, "'%v' %v", cmd, i18n.GetMessagePrinter().Sprintf("horizon project in %v already contains %v.", dir, fileName))
 	}
 }
 
@@ -113,7 +113,10 @@ func FileExists(directory string, fileName string) (bool, error) {
 func GetFile(directory string, fileName string, obj interface{}) error {
 	filePath := path.Join(directory, fileName)
 
-	fileBytes := cliutils.ReadJsonFile(filePath)
+	fileBytes, err := cliutils.ReadJsonFile(filePath)
+	if err != nil {
+		return err
+	}
 	if err := json.Unmarshal(fileBytes, obj); err != nil {
 		return errors.New(i18n.GetMessagePrinter().Sprintf("failed to unmarshal %s, error: %v", filePath, err))
 	}
@@ -169,10 +172,11 @@ func VerifyEnvironment(homeDirectory string, mustExist bool, needExchange bool, 
 	if needExchange && os.Getenv(DEVTOOL_HZN_USER) == "" && userCreds == "" {
 		return "", errors.New(msgPrinter.Sprintf("Must set environment variable %v or specify user exchange credentials with --user-pw", DEVTOOL_HZN_USER))
 	} else if os.Getenv(DEVTOOL_HZN_EXCHANGE_URL) == "" {
-		exchangeUrl := cliutils.GetExchangeUrl()
-		if exchangeUrl != "" {
+		if exchangeUrl, err := cliutils.GetExchangeUrl(); err != nil {
+			return "", err
+		} else if exchangeUrl != "" {
 			if err := os.Setenv(DEVTOOL_HZN_EXCHANGE_URL, exchangeUrl); err != nil {
-				cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to set env var %v to %v, error %v", DEVTOOL_HZN_EXCHANGE_URL, exchangeUrl, err))
+				return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to set env var %v to %v, error %v", DEVTOOL_HZN_EXCHANGE_URL, exchangeUrl, err))
 			}
 		} else {
 			return "", errors.New(msgPrinter.Sprintf("Environment variable %v must be set.", DEVTOOL_HZN_EXCHANGE_URL))
@@ -200,23 +204,23 @@ func IsServiceProject(directory string) bool {
 }
 
 // autoAddDep -- if true, the dependent services will be automatically added if they can be found from the exchange
-func CommonProjectValidation(dir string, userInputFile string, projectType string, cmd string, userCreds string, autoAddDep bool) {
+func CommonProjectValidation(dir string, userInputFile string, projectType string, cmd string, userCreds string, autoAddDep bool, exchangeHandler cliutils.ServiceHandler) {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// Get the Userinput file, so that we can validate it.
 	userInputs, userInputsFilePath, uierr := GetUserInputs(dir, userInputFile)
 	if uierr != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, "'%v %v' %v", projectType, cmd, uierr)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, "'%v %v' %v", projectType, cmd, uierr)
 	}
 
 	// Validate Dependencies
-	if derr := ValidateDependencies(dir, userInputs, userInputsFilePath, projectType, userCreds, autoAddDep); derr != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("'%v %v' project does not validate. %v", projectType, cmd, derr))
+	if derr := ValidateDependencies(dir, userInputs, userInputsFilePath, projectType, userCreds, autoAddDep, exchangeHandler); derr != nil {
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("'%v %v' project does not validate. %v", projectType, cmd, derr))
 	}
 
 	if verr := ValidateUserInput(userInputs, dir, userInputsFilePath, projectType); verr != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("'%v %v' project does not validate. %v ", projectType, cmd, verr))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("'%v %v' project does not validate. %v ", projectType, cmd, verr))
 	}
 }
 
@@ -226,16 +230,16 @@ func FileValidation(configFiles []string, configType string, projectType string,
 	msgPrinter := i18n.GetMessagePrinter()
 
 	if len(configFiles) > 0 && configType == "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("'%v %v' Must specify configuration file type (-t) when a configuration file is specified (-m).", projectType, cmd))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("'%v %v' Must specify configuration file type (-t) when a configuration file is specified (-m).", projectType, cmd))
 	}
 
 	absoluteFiles := make([]string, 0, 5)
 
 	for _, fileRef := range configFiles {
 		if absFileRef, err := filepath.Abs(fileRef); err != nil {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("'%v %v' configuration file %v error %v", projectType, cmd, fileRef, err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("'%v %v' configuration file %v error %v", projectType, cmd, fileRef, err))
 		} else if _, err := os.Stat(absFileRef); err != nil {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("'%v %v' configuration file %v error %v", projectType, cmd, fileRef, err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("'%v %v' configuration file %v error %v", projectType, cmd, fileRef, err))
 		} else {
 			absoluteFiles = append(absoluteFiles, absFileRef)
 		}
@@ -287,7 +291,7 @@ func setup(homeDirectory string, mustExist bool, needExchange bool, userCreds st
 
 	// Verify that the project is a service project.
 	if !IsServiceProject(dir) {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("project in %v is not a horizon project.", dir))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("project in %v is not a horizon project.", dir))
 	}
 
 	return dir, nil
@@ -434,19 +438,19 @@ func CommonExecutionSetup(homeDirectory string, userInputFile string, projectTyp
 	// Get the setup info and context for running the command.
 	dir, err := setup(homeDirectory, true, false, "")
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, "'%v %v' %v", projectType, cmd, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, "'%v %v' %v", projectType, cmd, err)
 	}
 
 	// Get the userinput file, so that we can get the userinput variables.
 	userInputs, _, err := GetUserInputs(dir, userInputFile)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", projectType, cmd, err)
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "'%v %v' %v", projectType, cmd, err)
 	}
 
 	// Create the containerWorker
 	cw, cerr := createContainerWorker()
 	if cerr != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, i18n.GetMessagePrinter().Sprintf("'%v %v' unable to create Container Worker, %v", projectType, cmd, cerr))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, i18n.GetMessagePrinter().Sprintf("'%v %v' unable to create Container Worker, %v", projectType, cmd, cerr))
 	}
 
 	return dir, userInputs, cw
@@ -540,7 +544,7 @@ func ProcessStartDependencies(dir string, deps []*common.ServiceFile, globals []
 			// Stop any services that might already be started.
 			ServiceStopTest(dir)
 
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' %v for dependency %v", SERVICE_COMMAND, SERVICE_START_COMMAND, startErr, depDef.URL))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' %v for dependency %v", SERVICE_COMMAND, SERVICE_START_COMMAND, startErr, depDef.URL))
 
 		} else {
 
@@ -570,7 +574,7 @@ func ProcessStartDependencies(dir string, deps []*common.ServiceFile, globals []
 				for serviceName, _ := range depConfig.Services {
 					serviceContainers, err := findContainers(serviceName, cutil.MakeMSInstanceKey(depDef.URL, depDef.Org, depDef.Version, ""), cw)
 					if err != nil {
-						cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' unable to list existing containers: %v", SERVICE_COMMAND, SERVICE_START_COMMAND, err))
+						return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' unable to list existing containers: %v", SERVICE_COMMAND, SERVICE_START_COMMAND, err))
 					}
 					containers = append(containers, serviceContainers...)
 				}

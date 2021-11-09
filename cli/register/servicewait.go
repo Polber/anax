@@ -23,7 +23,7 @@ type serviceSpec struct {
 }
 
 // Check if service type and node type match
-func CheckService(name string, org string, arch string, version string, nodeType string, nodeOrg string, nodeIdTok string) bool {
+func CheckService(name string, org string, arch string, version string, nodeType string, nodeOrg string, nodeIdTok string, exchangeHandler cliutils.ServiceHandler) (bool, error) {
 	var services exchange.GetServicesResponse
 
 	// get message printer
@@ -31,16 +31,17 @@ func CheckService(name string, org string, arch string, version string, nodeType
 
 	// get service from exchange
 	id := cutil.FormExchangeIdForService(name, version, arch)
-	httpCode := cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), "orgs/"+org+"/services/"+id, cliutils.OrgAndCreds(nodeOrg, nodeIdTok), []int{200, 404}, &services)
-	if httpCode == 404 {
-		cliutils.Fatal(cliutils.NOT_FOUND, msgPrinter.Sprintf("service '%s' not found in org %s", id, org))
+	if httpCode, err := exchangeHandler.Get("orgs/"+org+"/services/"+id, cliutils.OrgAndCreds(nodeOrg, nodeIdTok), &services); err != nil {
+		return false, err
+	} else if httpCode == 404 {
+		return cliutils.CLIError{StatusCode: cliutils.NOT_FOUND, msgPrinter.Sprintf("service '%s' not found in org %s", id, org))
 	}
 	// Check in the service type
 	for _, s := range services.Services {
 		serviceType := s.GetServiceType()
-		return nodeType == serviceType || serviceType == exchangecommon.SERVICE_TYPE_BOTH
+		return nodeType == serviceType || serviceType == exchangecommon.SERVICE_TYPE_BOTH, nil
 	}
-	return false
+	return false, nil
 }
 
 type WaitingStatus int
@@ -103,7 +104,7 @@ func ServiceAllSucess(servSpecArr []serviceSpec) (bool, bool) {
 }
 
 // Wait for the specified service to start running on this node.
-func WaitForService(org string, waitService string, waitTimeout int, pattern string, pat exchange.Pattern, nodeType string, nodeArch, nodeOrg string, nodeIdTok string, userOrg string, userPw string) {
+func WaitForService(org string, waitService string, waitTimeout int, pattern string, pat exchange.Pattern, nodeType string, nodeArch, nodeOrg string, nodeIdTok string, userOrg string, userPw string, exchangeHandler cliutils.ServiceHandler) error {
 
 	const UpdateThreshold = 5    // How many service check iterations before updating the user with a msg on the console.
 	const ServiceUpThreshold = 5 // How many service check iterations before deciding that the service is up.
@@ -113,14 +114,18 @@ func WaitForService(org string, waitService string, waitTimeout int, pattern str
 
 	// Verify that the input makes sense.
 	if waitTimeout < 0 {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("--timeout must be a positive integer."))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("--timeout must be a positive integer."))
 	}
 
 	servSpecArr := []serviceSpec{}
 	if pattern != "" {
 		for _, s := range pat.Services {
 			if (waitService == "*" || waitService == s.ServiceURL) && (org == "*" || org == s.ServiceOrg) && (s.ServiceArch == "*" || nodeArch == s.ServiceArch) {
-				if len(s.ServiceVersions) > 0 && CheckService(s.ServiceURL, s.ServiceOrg, nodeArch, s.ServiceVersions[0].Version, nodeType, nodeOrg, nodeIdTok) {
+				servCheck, err := CheckService(s.ServiceURL, s.ServiceOrg, nodeArch, s.ServiceVersions[0].Version, nodeType, nodeOrg, nodeIdTok, exchangeHandler)
+				if err != nil {
+					return err
+				}
+				if len(s.ServiceVersions) > 0 && servCheck {
 					servSpecArr = append(servSpecArr, serviceSpec{name: s.ServiceURL, org: s.ServiceOrg, status: 0, serviceUp: 0})
 				}
 			}
@@ -149,7 +154,7 @@ func WaitForService(org string, waitService string, waitTimeout int, pattern str
 	for uint64(time.Now().Unix())-now < uint64(waitTimeout) {
 		time.Sleep(time.Duration(3) * time.Second)
 		if _, err := cliutils.HorizonGet("service", []int{200}, &services, true); err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, err.Error())
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, err.Error())
 		}
 
 		// Active services are services that have at least been started. When the execution time becomes non-zero
@@ -157,7 +162,10 @@ func WaitForService(org string, waitService string, waitTimeout int, pattern str
 		instances := services.Instances["active"]
 
 		// Get active agreements to check status of services
-		ags := agreement.GetAgreements(false)
+		ags, err := agreement.GetAgreements(false)
+		if err != nil {
+			return err
+		}
 
 		serviceStatusUpdated := false
 
@@ -218,7 +226,7 @@ func WaitForService(org string, waitService string, waitTimeout int, pattern str
 		allSuccess, needWait := ServiceAllSucess(servSpecArr)
 		if allSuccess {
 			DisplayServiceStatus(servSpecArr, false)
-			return
+			return nil
 		}
 
 		if updateCounter <= 0 || serviceStatusUpdated {
@@ -298,7 +306,10 @@ func WaitForService(org string, waitService string, waitTimeout int, pattern str
 	// because we know there are agreements.
 	if len(delayedArr) > 0 || len(notDeployedArr) > 0 {
 		msgPrinter.Println()
-		ags := agreement.GetAgreements(false)
+		ags, err := agreement.GetAgreements(false)
+		if err != nil {
+			return err
+		}
 		if len(ags) != 0 {
 			msgPrinter.Printf("Currently, there are %v active agreements on this node. Use `hzn agreement list' to see the agreements that have been formed so far.", len(ags))
 			msgPrinter.Println()
@@ -326,8 +337,10 @@ func WaitForService(org string, waitService string, waitTimeout int, pattern str
 				msgPrinter.Println()
 				msgPrinter.Printf("Command output:")
 				msgPrinter.Println()
-				deploycheck.AllCompatible(userOrg, userPw, "", nodeArch, nodeType, nodeOrg, "", "",
-					"", "", pattern, "", "", []string{}, false, false)
+				if err := deploycheck.AllCompatible(userOrg, userPw, "", nodeArch, nodeType, nodeOrg, "", "",
+					"", "", pattern, "", "", []string{}, false, false, exchangeHandler); err != nil {
+						return err
+					}
 			} else {
 				msgPrinter.Printf("Using the 'hzn deploycheck userinput -p' command to verify that node, service configuration and pattern are compatible.")
 				msgPrinter.Println()
@@ -335,8 +348,10 @@ func WaitForService(org string, waitService string, waitTimeout int, pattern str
 				// check everything except secret binding because it requires user credential
 				msgPrinter.Printf("Command output:")
 				msgPrinter.Println()
-				deploycheck.UserInputCompatible(nodeOrg, nodeIdTok, "", nodeArch, nodeType,
-					"", "", "", pattern, "", []string{}, false, false)
+				if err := deploycheck.UserInputCompatible(nodeOrg, nodeIdTok, "", nodeArch, nodeType,
+					"", "", "", pattern, "", []string{}, false, false, exchangeHandler); err != nil {
+						return err
+					}
 
 				msgPrinter.Printf("The secret binding compatibility cannot be verified because the user credential is not provided. Please use the 'hzn deploycheck secretbinding -p' command to verify.")
 				msgPrinter.Println()
@@ -367,7 +382,7 @@ func WaitForService(org string, waitService string, waitTimeout int, pattern str
 				if strings.Contains(el.Message, serviceFullName) {
 					printLog = true
 				} else if es, err := persistence.GetRealEventSource(el.SourceType, el.Source); err != nil {
-					cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, "unable to convert eventlog source, error: %v", err)
+					return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, "unable to convert eventlog source, error: %v", err)
 				} else if (*es).Matches(match) {
 					printLog = true
 				}
@@ -392,5 +407,5 @@ func WaitForService(org string, waitService string, waitTimeout int, pattern str
 	msgPrinter.Printf("Analysis complete.")
 	msgPrinter.Println()
 
-	return
+	return nil
 }

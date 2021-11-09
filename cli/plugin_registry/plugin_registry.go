@@ -4,6 +4,8 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
+
+	"github.com/open-horizon/anax/cli/cliutils"
 	"github.com/open-horizon/anax/i18n"
 )
 
@@ -14,7 +16,7 @@ type DeploymentConfigPlugin interface {
 	DefaultConfig(imageInfo interface{}) interface{}
 	DefaultClusterConfig() interface{}
 	Validate(dep interface{}, cdep interface{}) (bool, error)
-	StartTest(homeDirectory string, userInputFile string, configFiles []string, configType string, noFSS bool, userCreds string, secretsFiles map[string]string) bool
+	StartTest(homeDirectory string, userInputFile string, configFiles []string, configType string, noFSS bool, userCreds string, secretsFiles map[string]string, exchangeHandler cliutils.ServiceHandler) (bool, error)
 	StopTest(homeDirectory string) bool
 }
 
@@ -72,9 +74,11 @@ func (d DeploymentConfigRegistry) ValidatedByOne(dep interface{}, cdep interface
 // Ask each plugin to attempt to start the project in test mode. Plugins are called
 // until one of them claims ownership of the deployment config. If no error is
 // returned, then one of the plugins has claimed the deployment config.
-func (d DeploymentConfigRegistry) StartTest(homeDirectory string, userInputFile string, configFiles []string, configType string, noFSS bool, userCreds string, secretsFiles map[string]string) error {
+func (d DeploymentConfigRegistry) StartTest(homeDirectory string, userInputFile string, configFiles []string, configType string, noFSS bool, userCreds string, secretsFiles map[string]string, exchangeHandler cliutils.ServiceHandler) error {
 	for _, p := range d {
-		if owned := p.StartTest(homeDirectory, userInputFile, configFiles, configType, noFSS, userCreds, secretsFiles); owned {
+		if owned, err := p.StartTest(homeDirectory, userInputFile, configFiles, configType, noFSS, userCreds, secretsFiles, exchangeHandler); err != nil {
+			return err
+		} else if owned {
 			return nil
 		}
 	}

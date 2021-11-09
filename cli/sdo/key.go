@@ -34,7 +34,7 @@ type KeyFile struct {
 }
 
 // Create key in SDO owner services from given keyFile
-func KeyCreate(org, userCreds string, keyFile *os.File, outputFile string, overwrite bool) {
+func KeyCreate(org, userCreds string, keyFile *os.File, outputFile string, overwrite bool) error {
 	defer keyFile.Close()
 	msgPrinter := i18n.GetMessagePrinter()
 	cliutils.Verbose(msgPrinter.Sprintf("Importing key file name: %s", keyFile.Name()))
@@ -42,47 +42,58 @@ func KeyCreate(org, userCreds string, keyFile *os.File, outputFile string, overw
 	// Don't attempt to create key if unable to put key in specified file
 	if !overwrite {
 		if _, err := os.Stat(outputFile); !os.IsNotExist(err) {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("File %s already exists. Please specify a different file path or file name. To overwrite the existing file, use the '--overwrite' flag.", outputFile))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("File %s already exists. Please specify a different file path or file name. To overwrite the existing file, use the '--overwrite' flag.", outputFile))
 		}
 	}
 
 	// Determine key file type, and handle it accordingly
 	var returnBody []byte
+	var err error
 	if strings.HasSuffix(keyFile.Name(), ".json") {
-		returnBody = import1Key(org, userCreds, bufio.NewReader(keyFile), keyFile.Name())
+		if returnBody, err = import1Key(org, userCreds, bufio.NewReader(keyFile), keyFile.Name()); err != nil {
+			return err
+		}
 	} else {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("unsupported key file type extension: %s", keyFile.Name()))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("unsupported key file type extension: %s", keyFile.Name()))
 	}
 
 	var fileExtension string
 	if outputFile != "" {
 		msgPrinter.Printf("Key \"%s\" successfully added to the SDO owner services.", keyFile.Name())
 		msgPrinter.Println()
-		fileName := cliutils.DownloadToFile(outputFile, keyFile.Name(), returnBody, fileExtension, 0600, overwrite)
+		fileName, err := cliutils.DownloadToFile(outputFile, keyFile.Name(), returnBody, fileExtension, 0600, overwrite)
+		if err != nil {
+			return err
+		}
 		msgPrinter.Printf("Key \"%s\" successfully downloaded to %s from the SDO owner services.", keyFile.Name(), fileName)
 		msgPrinter.Println()
 	} else {
 		fmt.Printf("%s\n", string(returnBody))
 	}
+
+	return nil
 }
 
 // List keys that are stored in SDO owner services
-func KeyList(org, userCreds, keyName string) {
+func KeyList(org, userCreds, keyName string) error {
 	msgPrinter := i18n.GetMessagePrinter()
 	var respBodyBytes []byte
 	var emptyBody []byte
 	var apiMsg string
 	var emptyKeyName string
+	var err error
 
 	// Retrieve keys from SDO owner services API
 	cliutils.Verbose(msgPrinter.Sprintf("Listing SDO keys."))
-	respBodyBytes, apiMsg = sendSdoKeysApiRequest(org, userCreds, emptyKeyName, http.MethodGet, emptyBody, []int{200, 404})
+	if respBodyBytes, apiMsg, err = sendSdoKeysApiRequest(org, userCreds, emptyKeyName, http.MethodGet, emptyBody, []int{200, 404}); err != nil {
+		return err
+	}
 
 	// Put response in Key object for formatting
 	output := []Key{}
-	err := json.Unmarshal(respBodyBytes, &output)
+	err = json.Unmarshal(respBodyBytes, &output)
 	if err != nil {
-		cliutils.Fatal(cliutils.HTTP_ERROR, msgPrinter.Sprintf("json unmarshalling HTTP response '%s' from %s: %v", string(respBodyBytes), apiMsg, err))
+		return cliutils.CLIError{StatusCode: cliutils.HTTP_ERROR, msgPrinter.Sprintf("json unmarshalling HTTP response '%s' from %s: %v", string(respBodyBytes), apiMsg, err))
 	}
 
 	// look for given keyName
@@ -98,11 +109,11 @@ func KeyList(org, userCreds, keyName string) {
 			}
 		}
 		if !found {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("SDO key name %s not found", keyName))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("SDO key name %s not found", keyName))
 		} else {
 			jsonBytes, err = json.MarshalIndent(foundKey, "", cliutils.JSON_INDENT)
 			if err != nil {
-				cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn sdo keys list' output: %v", err))
+				return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn sdo keys list' output: %v", err))
 			}
 		}
 
@@ -110,79 +121,101 @@ func KeyList(org, userCreds, keyName string) {
 	} else {
 		jsonBytes, err = json.MarshalIndent(output, "", cliutils.JSON_INDENT)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn sdo keys list' output: %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn sdo keys list' output: %v", err))
 		}
 	}
 
 	// List key(s) on screen
 	fmt.Printf("%s\n", jsonBytes)
+
+	return nil
 }
 
 // Download specified key from SDO owner services to file
-func KeyDownload(org, userCreds, keyName, outputFile string, overwrite bool) {
+func KeyDownload(org, userCreds, keyName, outputFile string, overwrite bool) error {
 	msgPrinter := i18n.GetMessagePrinter()
 	var emptyBody []byte
 	var fileExtension string
 
 	// Request key information from SDO owner services API
 	cliutils.Verbose(msgPrinter.Sprintf("Downloading SDO key \"%s\".", keyName))
-	respBodyBytes, _ := sendSdoKeysApiRequest(org, userCreds, keyName, http.MethodGet, emptyBody, []int{200})
+	respBodyBytes, _, err := sendSdoKeysApiRequest(org, userCreds, keyName, http.MethodGet, emptyBody, []int{200})
+	if err != nil {
+		return err
+	}
 
 	// Download response body directly to file
 	if outputFile != "" {
-		fileName := cliutils.DownloadToFile(outputFile, keyName, respBodyBytes, fileExtension, 0600, overwrite)
+		fileName, err := cliutils.DownloadToFile(outputFile, keyName, respBodyBytes, fileExtension, 0600, overwrite)
+		if err != nil {
+			return err
+		}
 		msgPrinter.Printf("Key \"%s\" successfully downloaded to %s from the SDO owner services.", keyName, fileName)
 		msgPrinter.Println()
 	} else {
 		// List keys on screen
 		fmt.Printf("%s\n", respBodyBytes)
 	}
+
+	return nil
 }
 
 // Remove sepcified key form SDO owner services
-func KeyRemove(org, userCreds, keyName string) {
+func KeyRemove(org, userCreds, keyName string) error {
 	msgPrinter := i18n.GetMessagePrinter()
 	cliutils.Verbose(msgPrinter.Sprintf("Removing SDO key \"%s\".", keyName))
 
 	// Tell SDO owner services API to remove specified key, if it exists
 	var emptyBody []byte
-	sendSdoKeysApiRequest(org, userCreds, keyName, http.MethodDelete, emptyBody, []int{204})
+	if _, _, err := sendSdoKeysApiRequest(org, userCreds, keyName, http.MethodDelete, emptyBody, []int{204}); err != nil {
+		return err
+	}
 
 	msgPrinter.Printf("Key \"%s\" successfully deleted from the SDO owner services.", keyName)
 	msgPrinter.Println()
+
+	return nil
 }
 
 // Download a sample key template. If file path specified, template will be written to given file, otherwise "sample-sdo-key.json"
-func KeyNew(outputFile string, overwrite bool) {
+func KeyNew(outputFile string, overwrite bool) error {
 	msgPrinter := i18n.GetMessagePrinter()
 	cliutils.Verbose(msgPrinter.Sprintf("Creating SDO key template at \"%s\".", outputFile))
 
 	// Create template json by marshalling empty KeyFile struct
 	body, err := json.MarshalIndent(KeyFile{}, "", cliutils.JSON_INDENT)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("parsing the json: %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("parsing the json: %v", err))
 	}
 
 	// Download the template to file
 	if outputFile != "" {
 		fileExtension := ".json"
 		defaultFileName := "sample-sdo-key"
-		fileName := cliutils.DownloadToFile(outputFile, defaultFileName, body, fileExtension, 0600, overwrite)
+		fileName, err := cliutils.DownloadToFile(outputFile, defaultFileName, body, fileExtension, 0600, overwrite)
+		if err != nil {
+			return err
+		}
 		msgPrinter.Printf("Key template successfully written to %s.", fileName)
 		msgPrinter.Println()
 	} else {
 		fmt.Printf("%s\n", body)
 	}
+
+	return nil
 }
 
 // Helper function to send API requests to SDO owner services API
-func sendSdoKeysApiRequest(org, userCreds, keyName, method string, body interface{}, goodHttpCodes []int) ([]byte, string) {
+func sendSdoKeysApiRequest(org, userCreds, keyName, method string, body interface{}, goodHttpCodes []int) ([]byte, string, error) {
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// setup HTTP parameters and URL
 	var respBodyBytes []byte
 	var sdoURL string
-	url := cliutils.GetSdoSvcUrl()
+	url, err := cliutils.GetSdoSvcUrl()
+	if err != nil {
+		return nil, "", err
+	}
 
 	sdoURL = url + "/orgs/" + org + "/keys" + cliutils.AddSlash(keyName)
 
@@ -190,32 +223,35 @@ func sendSdoKeysApiRequest(org, userCreds, keyName, method string, body interfac
 	apiMsg := method + " " + sdoURL
 	httpClient := cliutils.GetHTTPClient(config.HTTPRequestTimeoutS)
 
-	resp := cliutils.InvokeRestApi(httpClient, method, sdoURL, creds, body, "SDO Owner Service", apiMsg)
+	resp, err := cliutils.InvokeRestApi(httpClient, method, sdoURL, creds, body, "SDO Owner Service", apiMsg)
+	if err != nil {
+		return nil, "", err
+	}
 	if resp.Body != nil {
 		defer resp.Body.Close()
 	}
 	httpCode := resp.StatusCode
 	cliutils.Verbose(msgPrinter.Sprintf("HTTP code: %d", httpCode))
 
-	respBodyBytes, err := ioutil.ReadAll(resp.Body)
+	respBodyBytes, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		cliutils.Fatal(cliutils.HTTP_ERROR, msgPrinter.Sprintf("failed to read exchange body response from %s: %v", apiMsg, err))
+		return cliutils.CLIError{StatusCode: cliutils.HTTP_ERROR, msgPrinter.Sprintf("failed to read exchange body response from %s: %v", apiMsg, err))
 	}
 	if httpCode == 404 && keyName != "" {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Invalid key name. Key \"%s\" does not exist in org \"%s\".\n", keyName, org))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Invalid key name. Key \"%s\" does not exist in org \"%s\".\n", keyName, org))
 	} else if httpCode == 400 && method == http.MethodPost {
 		key, ok := body.(KeyFile)
 		if ok {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Invalid metadata file. Key \"%s\" already exists in SDO owner services for org \"%s\".\n", key.Name, org))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Invalid metadata file. Key \"%s\" already exists in SDO owner services for org \"%s\".\n", key.Name, org))
 		} else {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Invalid metadata file. Key already exists in SDO owner services for org \"%s\".", org))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Invalid metadata file. Key already exists in SDO owner services for org \"%s\".", org))
 		}
 	} else if httpCode == 401 {
 		user, _ := cliutils.SplitIdToken(userCreds)
 		if keyName == "" {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Invalid credentials. User \"%s\" cannot access keys in org \"%s\" with given credentials.\n", user, org))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Invalid credentials. User \"%s\" cannot access keys in org \"%s\" with given credentials.\n", user, org))
 		} else {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Invalid credentials. User \"%s\" cannot access key \"%s\" in org \"%s\" with given credentials.\n", user, keyName, org))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Invalid credentials. User \"%s\" cannot access key \"%s\" in org \"%s\" with given credentials.\n", user, keyName, org))
 		}
 	} else {
 		isGoodCode := false
@@ -225,51 +261,54 @@ func sendSdoKeysApiRequest(org, userCreds, keyName, method string, body interfac
 			}
 		}
 		if !isGoodCode {
-			cliutils.Fatal(cliutils.HTTP_ERROR, msgPrinter.Sprintf("bad HTTP code %d from %s: %s", httpCode, apiMsg, string(respBodyBytes)))
+			return cliutils.CLIError{StatusCode: cliutils.HTTP_ERROR, msgPrinter.Sprintf("bad HTTP code %d from %s: %s", httpCode, apiMsg, string(respBodyBytes)))
 		}
 	}
-	return respBodyBytes, apiMsg
+	return respBodyBytes, apiMsg, nil
 }
 
 // Helper function to POST a key to SDO owner services
-func import1Key(org, userCreds string, keyFileReader io.Reader, keyFileName string) []byte {
+func import1Key(org, userCreds string, keyFileReader io.Reader, keyFileName string) ([]byte, error) {
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// Parse the voucher so we can tell them what we are doing
 	key := KeyFile{}
 	keyBytes, err := ioutil.ReadAll(keyFileReader)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("reading the bytes from %s: %v", keyFileName, err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("reading the bytes from %s: %v", keyFileName, err))
 	} else if err = json.Unmarshal(keyBytes, &key); err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("parsing the json from %s: %v", keyFileName, err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("parsing the json from %s: %v", keyFileName, err))
 	}
 
 	// Check for empty fields in key file
 	if err := checkEmptyKeyFields(key); err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("given metadata file %s has missing fields:\n%s", keyFileName, err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("given metadata file %s has missing fields:\n%s", keyFileName, err))
 	}
 
 	// Check for unsupported key name in key file
 	if err := checkKeyName(key.Name); err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("given metadata file %s has unsupported key name.\n%s", keyFileName, err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("given metadata file %s has unsupported key name.\n%s", keyFileName, err))
 	}
 
 	// Check country code
 	if err := checkKeyCountry(key.Country); err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("given metadata file %s has unsupported country name.\n%s", keyFileName, err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("given metadata file %s has unsupported country name.\n%s", keyFileName, err))
 	}
 
 	// Remarshal key so that it is always in the right format
 	if keyBytes, err = json.Marshal(key); err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("parsing the json from %s: %v", keyFileName, err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("parsing the json from %s: %v", keyFileName, err))
 	}
 
 	// Import the key to the SDO owner service
 	var emptyName string
 	cliutils.Verbose(msgPrinter.Sprintf("JSON Body:%s\n", string(keyBytes)))
-	respBodyBytes, _ := sendSdoKeysApiRequest(org, userCreds, emptyName, http.MethodPost, key, []int{201})
+	respBodyBytes, _, err := sendSdoKeysApiRequest(org, userCreds, emptyName, http.MethodPost, key, []int{201})
+	if err != nil {
+		return nil, err
+	}
 
-	return respBodyBytes
+	return respBodyBytes, nil
 }
 
 // Check if keyfile stored in KeyFile struct as any empty fields

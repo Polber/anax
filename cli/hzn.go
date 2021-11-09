@@ -794,7 +794,13 @@ Environment Variables:
 	}
 	cliconfig.SetEnvVarsFromProjectConfigFile(project_dir)
 
+	// get handlers
+	exchangeHandler := cliutils.ExchangeHandler{}
+	agbotHandler := cliutils.AgbotHandler{}
+	mmsHandler := cliutils.MMSHandler{}
+
 	credToUse := ""
+	var err error
 	if strings.HasPrefix(fullCmd, "exchange ") {
 		exOrg = cliutils.WithDefaultEnvVar(exOrg, "HZN_ORG_ID")
 
@@ -809,77 +815,137 @@ Environment Variables:
 		// some hzn exchange commands can take either -u user:pw or -n nodeid:token as credentials.
 		switch subCmd := strings.TrimPrefix(fullCmd, "exchange | ex "); subCmd {
 		case "nmp add":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exNMPAddIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exNMPAddIdTok); err != nil {
+				handleError(err)
+			}
 		case "nmp list | ls":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exNMPListIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exNMPListIdTok); err != nil {
+				handleError(err)
+			}
 		case "nmp new":
 			// does not require exchange credentials
 		case "nmp remove | rm":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exNMPRemoveIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exNMPRemoveIdTok); err != nil {
+				handleError(err)
+			}
 		case "node list | ls":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exNodeListNodeIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exNodeListNodeIdTok); err != nil {
+				handleError(err)
+			}
 		case "node update | up":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exNodeUpdateIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exNodeUpdateIdTok); err != nil {
+				handleError(err)
+			}
 		case "node settoken":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exNodeSetTokNodeIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exNodeSetTokNodeIdTok); err != nil {
+				handleError(err)
+			}
 		case "node remove | rm":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exNodeRemoveNodeIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exNodeRemoveNodeIdTok); err != nil {
+				handleError(err)
+			}
 		case "node confirm | con":
 			//do nothing because it uses the node id and token given in the argument as the credential
 		case "node listpolicy | lsp":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exNodeListPolicyIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exNodeListPolicyIdTok); err != nil {
+				handleError(err)
+			}
 		case "node addpolicy | addp":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exNodeAddPolicyIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exNodeAddPolicyIdTok); err != nil {
+				handleError(err)
+			}
 		case "node updatepolicy | upp":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exNodeUpdatePolicyIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exNodeUpdatePolicyIdTok); err != nil {
+				handleError(err)
+			}
 		case "node removepolicy | rmp":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exNodeRemovePolicyIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exNodeRemovePolicyIdTok); err != nil {
+				handleError(err)
+			}
 		case "node listerrors | lse":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exNodeErrorsListIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exNodeErrorsListIdTok); err != nil {
+				handleError(err)
+			}
 		case "node liststatus | lst":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exNodeStatusIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exNodeStatusIdTok); err != nil {
+				handleError(err)
+			}
 		case "service | serv list | ls":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exServiceListNodeIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exServiceListNodeIdTok); err != nil {
+				handleError(err)
+			}
 		case "service | serv verify | vf":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exServiceVerifyNodeIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exServiceVerifyNodeIdTok); err != nil {
+				handleError(err)
+			}
 		case "service | serv listkey | lsk":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exServiceListKeyNodeIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exServiceListKeyNodeIdTok); err != nil {
+				handleError(err)
+			}
 		case "service | serv listauth | lsau":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exServiceListAuthNodeIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exServiceListAuthNodeIdTok); err != nil {
+				handleError(err)
+			}
 		case "pattern | pat list | ls":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exPatternListNodeIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exPatternListNodeIdTok); err != nil {
+				handleError(err)
+			}
 		case "pattern | pat update | up":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exPatUpdateNodeIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exPatUpdateNodeIdTok); err != nil {
+				handleError(err)
+			}
 		case "pattern | pat verify | vf":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exPatternVerifyNodeIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exPatternVerifyNodeIdTok); err != nil {
+				handleError(err)
+			}
 		case "pattern | pat listkey | lsk":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exPatternListKeyNodeIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exPatternListKeyNodeIdTok); err != nil {
+				handleError(err)
+			}
 		case "service | serv listpolicy | lsp":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exServiceListPolicyIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exServiceListPolicyIdTok); err != nil {
+				handleError(err)
+			}
 		case "service | serv addpolicy | addp":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exServiceAddPolicyIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exServiceAddPolicyIdTok); err != nil {
+				handleError(err)
+			}
 		case "service | serv removepolicy | rmp":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exServiceRemovePolicyIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exServiceRemovePolicyIdTok); err != nil {
+				handleError(err)
+			}
 		case "service | serv newpolicy | newp":
 			// does not require exchange credentials
 		case "deployment | dep listpolicy | ls":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exBusinessListPolicyIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exBusinessListPolicyIdTok); err != nil {
+				handleError(err)
+			}
 		case "deployment | dep updatepolicy | upp":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exBusinessUpdatePolicyIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exBusinessUpdatePolicyIdTok); err != nil {
+				handleError(err)
+			}
 		case "deployment | dep addpolicy | addp":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exBusinessAddPolicyIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exBusinessAddPolicyIdTok); err != nil {
+				handleError(err)
+			}
 		case "deployment | dep removepolicy | rmp":
-			credToUse = cliutils.GetExchangeAuth(*exUserPw, *exBusinessRemovePolicyIdTok)
+			if credToUse, err = cliutils.GetExchangeAuth(*exUserPw, *exBusinessRemovePolicyIdTok); err != nil {
+				handleError(err)
+			}
 		case "deployment | dep new":
 			// does not require exchange credentials
 		case "version":
 			credToUse = cliutils.GetExchangeAuthVersion(*exUserPw)
 		default:
 			// get HZN_EXCHANGE_USER_AUTH as default if exUserPw is empty
-			exUserPw = cliutils.RequiredWithDefaultEnvVar(exUserPw, "HZN_EXCHANGE_USER_AUTH", msgPrinter.Sprintf("exchange user authentication must be specified with either the -u flag or HZN_EXCHANGE_USER_AUTH"))
+			if exUserPw, err = cliutils.RequiredWithDefaultEnvVar(exUserPw, "HZN_EXCHANGE_USER_AUTH", msgPrinter.Sprintf("exchange user authentication must be specified with either the -u flag or HZN_EXCHANGE_USER_AUTH")); err != nil {
+				handleError(err)
+			}
 		}
 
-		if exVersion := exchange.LoadExchangeVersion(false, *exOrg, credToUse, *exUserPw); exVersion != "" {
+		if exVersion, err := exchange.LoadExchangeVersion(false, *exOrg, exchangeHandler, credToUse, *exUserPw); err != nil {
+			handleError(err)
+		} else if exVersion != "" {
 			if err := version.VerifyExchangeVersion1(exVersion, false); err != nil {
 				cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, err.Error())
 			}
@@ -896,7 +962,9 @@ Environment Variables:
 		// use HZN_ORG_ID or org provided by -o for version check
 		verCheckOrg := cliutils.WithDefaultEnvVar(org, "HZN_ORG_ID")
 
-		if exVersion := exchange.LoadExchangeVersion(false, *verCheckOrg, *userPw, *nodeIdTok); exVersion != "" {
+		if exVersion, err := exchange.LoadExchangeVersion(false, *verCheckOrg, exchangeHandler, *userPw, *nodeIdTok); err != nil {
+			handleError(err)
+		} else if exVersion != "" {
 			if err := version.VerifyExchangeVersion1(exVersion, false); err != nil {
 				cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, err.Error())
 			}
@@ -925,7 +993,9 @@ Environment Variables:
 			allCompBPolFile = allCompDepPolFile
 		}
 
-		if exVersion := exchange.LoadExchangeVersion(false, *deploycheckOrg, *deploycheckUserPw); exVersion != "" {
+		if exVersion, err := exchange.LoadExchangeVersion(false, *deploycheckOrg, exchangeHandler, *deploycheckUserPw); err != nil {
+			handleError(err)
+		} else if exVersion != "" {
 			if err := version.VerifyExchangeVersion1(exVersion, false); err != nil {
 				cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, err.Error())
 			}
@@ -934,8 +1004,12 @@ Environment Variables:
 
 	// For the mms command family, make sure that org and exchange credentials are specified in some way.
 	if strings.HasPrefix(fullCmd, "mms") {
-		mmsOrg = cliutils.RequiredWithDefaultEnvVar(mmsOrg, "HZN_ORG_ID", msgPrinter.Sprintf("organization ID must be specified with either the -o flag or HZN_ORG_ID"))
-		mmsUserPw = cliutils.RequiredWithDefaultEnvVar(mmsUserPw, "HZN_EXCHANGE_USER_AUTH", msgPrinter.Sprintf("exchange user authentication must be specified with either the -u flag or HZN_EXCHANGE_USER_AUTH"))
+		if mmsOrg, err = cliutils.RequiredWithDefaultEnvVar(mmsOrg, "HZN_ORG_ID", msgPrinter.Sprintf("organization ID must be specified with either the -o flag or HZN_ORG_ID")); err != nil {
+			handleError(err)
+		}
+		if mmsUserPw, err = cliutils.RequiredWithDefaultEnvVar(mmsUserPw, "HZN_EXCHANGE_USER_AUTH", msgPrinter.Sprintf("exchange user authentication must be specified with either the -u flag or HZN_EXCHANGE_USER_AUTH")); err != nil {
+			handleError(err)
+		}
 
 		if *mmsObjectListId == "" {
 			mmsObjectListId = mmsObjectListObjId
@@ -947,29 +1021,49 @@ Environment Variables:
 
 	// For the sdo command family, make sure that org and exchange credentials are specified in some way.
 	if strings.HasPrefix(fullCmd, "sdo voucher") && !strings.HasPrefix(fullCmd, "sdo voucher inspect") {
-		sdoOrg = cliutils.RequiredWithDefaultEnvVar(sdoOrg, "HZN_ORG_ID", msgPrinter.Sprintf("organization ID must be specified with either the -o flag or HZN_ORG_ID"))
-		sdoUserPw = cliutils.RequiredWithDefaultEnvVar(sdoUserPw, "HZN_EXCHANGE_USER_AUTH", msgPrinter.Sprintf("exchange user authentication must be specified with either the -u flag or HZN_EXCHANGE_USER_AUTH"))
+		if sdoOrg, err = cliutils.RequiredWithDefaultEnvVar(sdoOrg, "HZN_ORG_ID", msgPrinter.Sprintf("organization ID must be specified with either the -o flag or HZN_ORG_ID")); err != nil {
+			handleError(err)
+		}
+		if sdoUserPw, err = cliutils.RequiredWithDefaultEnvVar(sdoUserPw, "HZN_EXCHANGE_USER_AUTH", msgPrinter.Sprintf("exchange user authentication must be specified with either the -u flag or HZN_EXCHANGE_USER_AUTH")); err != nil {
+			handleError(err)
+		}
 	}
 	if strings.HasPrefix(fullCmd, "sdo key") && !strings.HasPrefix(fullCmd, "sdo key new") {
-		sdoOrg = cliutils.RequiredWithDefaultEnvVar(sdoOrg, "HZN_ORG_ID", msgPrinter.Sprintf("organization ID must be specified with either the -o flag or HZN_ORG_ID"))
-		sdoUserPw = cliutils.RequiredWithDefaultEnvVar(sdoUserPw, "HZN_EXCHANGE_USER_AUTH", msgPrinter.Sprintf("exchange user authentication must be specified with either the -u flag or HZN_EXCHANGE_USER_AUTH"))
+		if sdoOrg, err = cliutils.RequiredWithDefaultEnvVar(sdoOrg, "HZN_ORG_ID", msgPrinter.Sprintf("organization ID must be specified with either the -o flag or HZN_ORG_ID")); err != nil {
+			handleError(err)
+		}
+		if sdoUserPw, err = cliutils.RequiredWithDefaultEnvVar(sdoUserPw, "HZN_EXCHANGE_USER_AUTH", msgPrinter.Sprintf("exchange user authentication must be specified with either the -u flag or HZN_EXCHANGE_USER_AUTH")); err != nil {
+			handleError(err)
+		}
 	}
 
 	// DEPRECATED
 	// For the voucher import command family, make sure that org and exchange credentials are specified in some way.
 	if strings.HasPrefix(fullCmd, "voucher import") {
-		voucherOrg = cliutils.RequiredWithDefaultEnvVar(voucherOrg, "HZN_ORG_ID", msgPrinter.Sprintf("organization ID must be specified with either the -o flag or HZN_ORG_ID"))
-		voucherUserPw = cliutils.RequiredWithDefaultEnvVar(voucherUserPw, "HZN_EXCHANGE_USER_AUTH", msgPrinter.Sprintf("exchange user authentication must be specified with either the -u flag or HZN_EXCHANGE_USER_AUTH"))
+		if voucherOrg, err = cliutils.RequiredWithDefaultEnvVar(voucherOrg, "HZN_ORG_ID", msgPrinter.Sprintf("organization ID must be specified with either the -o flag or HZN_ORG_ID")); err != nil {
+			handleError(err)
+		}
+		if voucherUserPw, err = cliutils.RequiredWithDefaultEnvVar(voucherUserPw, "HZN_EXCHANGE_USER_AUTH", msgPrinter.Sprintf("exchange user authentication must be specified with either the -u flag or HZN_EXCHANGE_USER_AUTH")); err != nil {
+			handleError(err)
+		}
 	}
 	if strings.HasPrefix(fullCmd, "voucher list") {
-		voucherOrg = cliutils.RequiredWithDefaultEnvVar(voucherOrg, "HZN_ORG_ID", msgPrinter.Sprintf("organization ID must be specified with either the -o flag or HZN_ORG_ID"))
-		voucherUserPw = cliutils.RequiredWithDefaultEnvVar(voucherUserPw, "HZN_EXCHANGE_USER_AUTH", msgPrinter.Sprintf("exchange user authentication must be specified with either the -u flag or HZN_EXCHANGE_USER_AUTH"))
+		if voucherOrg, err = cliutils.RequiredWithDefaultEnvVar(voucherOrg, "HZN_ORG_ID", msgPrinter.Sprintf("organization ID must be specified with either the -o flag or HZN_ORG_ID")); err != nil {
+			handleError(err)
+		}
+		if voucherUserPw, err = cliutils.RequiredWithDefaultEnvVar(voucherUserPw, "HZN_EXCHANGE_USER_AUTH", msgPrinter.Sprintf("exchange user authentication must be specified with either the -u flag or HZN_EXCHANGE_USER_AUTH")); err != nil {
+			handleError(err)
+		}
 	}
 
 	// For the secret manager command family, make sure that org is specified in some way.
 	if strings.HasPrefix(fullCmd, "secretsmanager") {
-		smOrg = cliutils.RequiredWithDefaultEnvVar(smOrg, "HZN_ORG_ID", msgPrinter.Sprintf("organization ID must be specified with either the -o flag or HZN_ORG_ID"))
-		smUserPw = cliutils.RequiredWithDefaultEnvVar(smUserPw, "HZN_EXCHANGE_USER_AUTH", msgPrinter.Sprintf("exchange user authentication must be specified with either the -u flag or HZN_EXCHANGE_USER_AUTH"))
+		if smOrg, err = cliutils.RequiredWithDefaultEnvVar(smOrg, "HZN_ORG_ID", msgPrinter.Sprintf("organization ID must be specified with either the -o flag or HZN_ORG_ID")); err != nil {
+			handleError(err)
+		}
+		if smUserPw, err = cliutils.RequiredWithDefaultEnvVar(smUserPw, "HZN_EXCHANGE_USER_AUTH", msgPrinter.Sprintf("exchange user authentication must be specified with either the -u flag or HZN_EXCHANGE_USER_AUTH")); err != nil {
+			handleError(err)
+		}
 	}
 
 	// key file defaults
@@ -995,294 +1089,312 @@ Environment Variables:
 	case envCmd.FullCommand():
 		envOrg := os.Getenv("HZN_ORG_ID")
 		envUserPw := os.Getenv("HZN_EXCHANGE_USER_AUTH")
-		envExchUrl := cliutils.GetExchangeUrl()
-		envCcsUrl := cliutils.GetMMSUrl()
+		envExchUrl, err := cliutils.GetExchangeUrl()
+		if err != nil {
+			handleError(err)
+		}
+		envCcsUrl, err := cliutils.GetMMSUrl()
+		if err != nil {
+			handleError(err)
+		}
 		envAgbotUrl := cliutils.GetAgbotSecureAPIUrlBase()
-		node.Env(envOrg, envUserPw, envExchUrl, envCcsUrl, envAgbotUrl)
+		err = node.Env(envOrg, envUserPw, envExchUrl, envCcsUrl, envAgbotUrl)
 	case versionCmd.FullCommand():
-		node.Version()
+		err = node.Version()
 	case archCmd.FullCommand():
-		node.Architecture()
+		err = node.Architecture()
 	case exVersionCmd.FullCommand():
-		exchange.Version(*exOrg, credToUse)
+		err = exchange.Version(*exOrg, credToUse, exchangeHandler)
 	case exStatusCmd.FullCommand():
-		exchange.Status(*exOrg, *exUserPw)
+		err = exchange.Status(*exOrg, *exUserPw, exchangeHandler)
 
 	case exOrgListCmd.FullCommand():
-		exchange.OrgList(*exOrg, *exUserPw, *exOrgListOrg, *exOrgListLong)
+		err = exchange.OrgList(*exOrg, *exUserPw, *exOrgListOrg, *exOrgListLong, exchangeHandler)
 	case exOrgCreateCmd.FullCommand():
-		exchange.OrgCreate(*exOrg, *exUserPw, *exOrgCreateOrg, *exOrgCreateLabel, *exOrgCreateDesc, *exOrgCreateTags, *exOrgCreateHBMin, *exOrgCreateHBMax, *exOrgCreateHBAdjust, *exOrgCreateMaxNodes, *exOrgCreateAddToAgbot)
+		err = exchange.OrgCreate(*exOrg, *exUserPw, *exOrgCreateOrg, *exOrgCreateLabel, *exOrgCreateDesc, *exOrgCreateTags, *exOrgCreateHBMin, *exOrgCreateHBMax, *exOrgCreateHBAdjust, *exOrgCreateMaxNodes, *exOrgCreateAddToAgbot, exchangeHandler, mmsHandler)
 	case exOrgUpdateCmd.FullCommand():
-		exchange.OrgUpdate(*exOrg, *exUserPw, *exOrgUpdateOrg, *exOrgUpdateLabel, *exOrgUpdateDesc, *exOrgUpdateTags, *exOrgUpdateHBMin, *exOrgUpdateHBMax, *exOrgUpdateHBAdjust, *exOrgUpdateMaxNodes)
+		err = exchange.OrgUpdate(*exOrg, *exUserPw, *exOrgUpdateOrg, *exOrgUpdateLabel, *exOrgUpdateDesc, *exOrgUpdateTags, *exOrgUpdateHBMin, *exOrgUpdateHBMax, *exOrgUpdateHBAdjust, *exOrgUpdateMaxNodes, exchangeHandler)
 	case exOrgDelCmd.FullCommand():
-		exchange.OrgDel(*exOrg, *exUserPw, *exOrgDelOrg, *exOrgDelFromAgbot, *exOrgDelForce)
+		err = exchange.OrgDel(*exOrg, *exUserPw, *exOrgDelOrg, *exOrgDelFromAgbot, *exOrgDelForce, exchangeHandler, mmsHandler)
 
 	case exUserListCmd.FullCommand():
-		exchange.UserList(*exOrg, *exUserPw, *exUserListUser, *exUserListAll, *exUserListNamesOnly)
+		err = exchange.UserList(*exOrg, *exUserPw, *exUserListUser, *exUserListAll, *exUserListNamesOnly, exchangeHandler)
 	case exUserCreateCmd.FullCommand():
-		exchange.UserCreate(*exOrg, *exUserPw, *exUserCreateUser, *exUserCreatePw, *exUserCreateEmail, *exUserCreateIsAdmin, *exUserCreateIsHubAdmin)
+		err = exchange.UserCreate(*exOrg, *exUserPw, *exUserCreateUser, *exUserCreatePw, *exUserCreateEmail, *exUserCreateIsAdmin, *exUserCreateIsHubAdmin, exchangeHandler)
 	case exUserSetAdminCmd.FullCommand():
-		exchange.UserSetAdmin(*exOrg, *exUserPw, *exUserSetAdminUser, *exUserSetAdminBool)
+		err = exchange.UserSetAdmin(*exOrg, *exUserPw, *exUserSetAdminUser, *exUserSetAdminBool, exchangeHandler)
 	case exUserDelCmd.FullCommand():
-		exchange.UserRemove(*exOrg, *exUserPw, *exDelUser, *exUserDelForce)
+		err = exchange.UserRemove(*exOrg, *exUserPw, *exDelUser, *exUserDelForce, exchangeHandler)
 
 	case exNMPListCmd.FullCommand():
-		exchange.NMPList(*exOrg, credToUse, *exNMPListName, !*exNMPListLong)
+		err = exchange.NMPList(*exOrg, credToUse, *exNMPListName, !*exNMPListLong, exchangeHandler)
 	case exNMPAddCmd.FullCommand():
-		exchange.NMPAdd(*exOrg, credToUse, *exNMPAddName, *exNMPAddJsonFile, *exNMPAddNoConstraint)
+		err = exchange.NMPAdd(*exOrg, credToUse, *exNMPAddName, *exNMPAddJsonFile, *exNMPAddNoConstraint, exchangeHandler)
 	case exNMPNewCmd.FullCommand():
-		exchange.NMPNew()
+		err = exchange.NMPNew()
 	case exNMPRemoveCmd.FullCommand():
-		exchange.NMPRemove(*exOrg, credToUse, *exNMPRemoveName, *exNMPRemoveForce)
+		err = exchange.NMPRemove(*exOrg, credToUse, *exNMPRemoveName, *exNMPRemoveForce, exchangeHandler)
 
 	case exNodeListCmd.FullCommand():
-		exchange.NodeList(*exOrg, credToUse, *exNode, !*exNodeLong)
+		err = exchange.NodeList(*exOrg, credToUse, *exNode, !*exNodeLong, exchangeHandler)
 	case exNodeUpdateCmd.FullCommand():
-		exchange.NodeUpdate(*exOrg, credToUse, *exNodeUpdateNode, *exNodeUpdateJsonFile)
+		err = exchange.NodeUpdate(*exOrg, credToUse, *exNodeUpdateNode, *exNodeUpdateJsonFile, exchangeHandler)
 	case exNodeCreateCmd.FullCommand():
-		exchange.NodeCreate(*exOrg, *exNodeCreateNodeIdTok, *exNodeCreateNode, *exNodeCreateToken, *exUserPw, *exNodeCreateNodeArch, *exNodeCreateNodeName, *exNodeCreateNodeType, true)
+		err = exchange.NodeCreate(*exOrg, *exNodeCreateNodeIdTok, *exNodeCreateNode, *exNodeCreateToken, *exUserPw, *exNodeCreateNodeArch, *exNodeCreateNodeName, *exNodeCreateNodeType, true, exchangeHandler)
 	case exNodeSetTokCmd.FullCommand():
-		exchange.NodeSetToken(*exOrg, credToUse, *exNodeSetTokNode, *exNodeSetTokToken)
+		err = exchange.NodeSetToken(*exOrg, credToUse, *exNodeSetTokNode, *exNodeSetTokToken, exchangeHandler)
 	case exNodeConfirmCmd.FullCommand():
-		exchange.NodeConfirm(*exOrg, *exNodeConfirmNode, *exNodeConfirmToken, *exNodeConfirmNodeIdTok)
+		err = exchange.NodeConfirm(*exOrg, *exNodeConfirmNode, *exNodeConfirmToken, *exNodeConfirmNodeIdTok, exchangeHandler)
 	case exNodeDelCmd.FullCommand():
-		exchange.NodeRemove(*exOrg, credToUse, *exDelNode, *exNodeDelForce)
+		err = exchange.NodeRemove(*exOrg, credToUse, *exDelNode, *exNodeDelForce, exchangeHandler)
 	case exNodeListPolicyCmd.FullCommand():
-		exchange.NodeListPolicy(*exOrg, credToUse, *exNodeListPolicyNode)
+		err = exchange.NodeListPolicy(*exOrg, credToUse, *exNodeListPolicyNode, exchangeHandler)
 	case exNodeAddPolicyCmd.FullCommand():
-		exchange.NodeAddPolicy(*exOrg, credToUse, *exNodeAddPolicyNode, *exNodeAddPolicyJsonFile)
+		err = exchange.NodeAddPolicy(*exOrg, credToUse, *exNodeAddPolicyNode, *exNodeAddPolicyJsonFile, exchangeHandler)
 	case exNodeUpdatePolicyCmd.FullCommand():
-		exchange.NodeUpdatePolicy(*exOrg, credToUse, *exNodeUpdatePolicyNode, *exNodeUpdatePolicyJsonFile)
+		err = exchange.NodeUpdatePolicy(*exOrg, credToUse, *exNodeUpdatePolicyNode, *exNodeUpdatePolicyJsonFile, exchangeHandler)
 	case exNodeRemovePolicyCmd.FullCommand():
-		exchange.NodeRemovePolicy(*exOrg, credToUse, *exNodeRemovePolicyNode, *exNodeRemovePolicyForce)
+		err = exchange.NodeRemovePolicy(*exOrg, credToUse, *exNodeRemovePolicyNode, *exNodeRemovePolicyForce, exchangeHandler)
 	case exNodeErrorsList.FullCommand():
-		exchange.NodeListErrors(*exOrg, credToUse, *exNodeErrorsListNode, *exNodeErrorsListLong)
+		err = exchange.NodeListErrors(*exOrg, credToUse, *exNodeErrorsListNode, *exNodeErrorsListLong, exchangeHandler)
 	case exNodeStatusList.FullCommand():
-		exchange.NodeListStatus(*exOrg, credToUse, *exNodeStatusListNode)
+		err = exchange.NodeListStatus(*exOrg, credToUse, *exNodeStatusListNode, exchangeHandler)
 
 	case agbotCacheServedOrgList.FullCommand():
-		agreementbot.GetServedOrgs()
+		err = agreementbot.GetServedOrgs()
 	case agbotCachePatternList.FullCommand():
-		agreementbot.GetPatterns(*agbotCachePatternListOrg, *agbotCachePatternListName, *agbotCachePatternListLong)
+		err = agreementbot.GetPatterns(*agbotCachePatternListOrg, *agbotCachePatternListName, *agbotCachePatternListLong)
 	case agbotCacheDeployPolList.FullCommand():
-		agreementbot.GetPolicies(*agbotCacheDeployPolListOrg, *agbotCacheDeployPolListName, *agbotCacheDeployPolListLong)
+		err = agreementbot.GetPolicies(*agbotCacheDeployPolListOrg, *agbotCacheDeployPolListName, *agbotCacheDeployPolListLong)
 
 	case exAgbotListCmd.FullCommand():
-		exchange.AgbotList(*exOrg, *exUserPw, *exAgbot, !*exAgbotLong)
+		err = exchange.AgbotList(*exOrg, *exUserPw, *exAgbot, !*exAgbotLong, exchangeHandler)
 	case exAgbotListPatsCmd.FullCommand():
-		exchange.AgbotListPatterns(*exOrg, *exUserPw, *exAgbotLP, *exAgbotLPPatOrg, *exAgbotLPPat, *exAgbotLPNodeOrg)
+		err = exchange.AgbotListPatterns(*exOrg, *exUserPw, *exAgbotLP, *exAgbotLPPatOrg, *exAgbotLPPat, *exAgbotLPNodeOrg, exchangeHandler)
 	case exAgbotAddPatCmd.FullCommand():
-		exchange.AgbotAddPattern(*exOrg, *exUserPw, *exAgbotAP, *exAgbotAPPatOrg, *exAgbotAPPat, *exAgbotAPNodeOrg)
+		err = exchange.AgbotAddPattern(*exOrg, *exUserPw, *exAgbotAP, *exAgbotAPPatOrg, *exAgbotAPPat, *exAgbotAPNodeOrg, exchangeHandler)
 	case exAgbotDelPatCmd.FullCommand():
-		exchange.AgbotRemovePattern(*exOrg, *exUserPw, *exAgbotDP, *exAgbotDPPatOrg, *exAgbotDPPat, *exAgbotDPNodeOrg)
+		err = exchange.AgbotRemovePattern(*exOrg, *exUserPw, *exAgbotDP, *exAgbotDPPatOrg, *exAgbotDPPat, *exAgbotDPNodeOrg, exchangeHandler)
 	case exAgbotListPolicyCmd.FullCommand():
-		exchange.AgbotListBusinessPolicy(*exOrg, *exUserPw, *exAgbotPol)
+		err = exchange.AgbotListBusinessPolicy(*exOrg, *exUserPw, *exAgbotPol, exchangeHandler)
 	case exAgbotAddPolCmd.FullCommand():
-		exchange.AgbotAddBusinessPolicy(*exOrg, *exUserPw, *exAgbotAPolAg, *exAgbotAPPolOrg)
+		err = exchange.AgbotAddBusinessPolicy(*exOrg, *exUserPw, *exAgbotAPolAg, *exAgbotAPPolOrg, exchangeHandler)
 	case exAgbotDelPolCmd.FullCommand():
-		exchange.AgbotRemoveBusinessPolicy(*exOrg, *exUserPw, *exAgbotDPolAg, *exAgbotDPPolOrg)
+		err = exchange.AgbotRemoveBusinessPolicy(*exOrg, *exUserPw, *exAgbotDPolAg, *exAgbotDPPolOrg, exchangeHandler)
 	case exPatternListCmd.FullCommand():
-		exchange.PatternList(*exOrg, credToUse, *exPattern, !*exPatternLong)
+		err = exchange.PatternList(*exOrg, credToUse, *exPattern, !*exPatternLong, exchangeHandler)
 	case exPatternPublishCmd.FullCommand():
-		exchange.PatternPublish(*exOrg, *exUserPw, *exPatJsonFile, *exPatKeyFile, *exPatPubPubKeyFile, *exPatName)
+		err = exchange.PatternPublish(*exOrg, *exUserPw, *exPatJsonFile, *exPatKeyFile, *exPatPubPubKeyFile, *exPatName, exchangeHandler)
 	case exPatternVerifyCmd.FullCommand():
-		exchange.PatternVerify(*exOrg, credToUse, *exVerPattern, *exPatPubKeyFile)
+		err = exchange.PatternVerify(*exOrg, credToUse, *exVerPattern, *exPatPubKeyFile, exchangeHandler)
 	case exPatDelCmd.FullCommand():
-		exchange.PatternRemove(*exOrg, *exUserPw, *exDelPat, *exPatDelForce)
+		err = exchange.PatternRemove(*exOrg, *exUserPw, *exDelPat, *exPatDelForce, exchangeHandler)
 	case exPatternListKeyCmd.FullCommand():
-		exchange.PatternListKey(*exOrg, credToUse, *exPatListKeyPat, *exPatListKeyKey)
+		err = exchange.PatternListKey(*exOrg, credToUse, *exPatListKeyPat, *exPatListKeyKey, exchangeHandler)
 	case exPatUpdateCmd.FullCommand():
-		exchange.PatternUpdate(*exOrg, credToUse, *exPatUpdatePattern, *exPatUpdateJsonFile)
+		err = exchange.PatternUpdate(*exOrg, credToUse, *exPatUpdatePattern, *exPatUpdateJsonFile, exchangeHandler)
 	case exPatternRemKeyCmd.FullCommand():
-		exchange.PatternRemoveKey(*exOrg, *exUserPw, *exPatRemKeyPat, *exPatRemKeyKey)
+		err = exchange.PatternRemoveKey(*exOrg, *exUserPw, *exPatRemKeyPat, *exPatRemKeyKey, exchangeHandler)
 	case exServiceListCmd.FullCommand():
-		exchange.ServiceList(*exOrg, credToUse, *exService, !*exServiceLong, *exSvcOpYamlFilePath, *exSvcOpYamlForce)
+		err = exchange.ServiceList(*exOrg, credToUse, *exService, !*exServiceLong, *exSvcOpYamlFilePath, *exSvcOpYamlForce, exchangeHandler)
 	case exServicePublishCmd.FullCommand():
-		exchange.ServicePublish(*exOrg, *exUserPw, *exSvcJsonFile, *exSvcPrivKeyFile, *exSvcPubPubKeyFile, *exSvcPubDontTouchImage, *exSvcPubPullImage, *exSvcRegistryTokens, *exSvcOverwrite, *exSvcPolicyFile, *exSvcPublic)
+		err = exchange.ServicePublish(*exOrg, *exUserPw, *exSvcJsonFile, *exSvcPrivKeyFile, *exSvcPubPubKeyFile, *exSvcPubDontTouchImage, *exSvcPubPullImage, *exSvcRegistryTokens, *exSvcOverwrite, *exSvcPolicyFile, *exSvcPublic, exchangeHandler)
 	case exServiceVerifyCmd.FullCommand():
-		exchange.ServiceVerify(*exOrg, credToUse, *exVerService, *exSvcPubKeyFile)
+		err = exchange.ServiceVerify(*exOrg, credToUse, *exVerService, *exSvcPubKeyFile, exchangeHandler)
 	case exSvcDelCmd.FullCommand():
-		exchange.ServiceRemove(*exOrg, *exUserPw, *exDelSvc, *exSvcDelForce)
+		err = exchange.ServiceRemove(*exOrg, *exUserPw, *exDelSvc, *exSvcDelForce, exchangeHandler)
 	case exServiceListKeyCmd.FullCommand():
-		exchange.ServiceListKey(*exOrg, credToUse, *exSvcListKeySvc, *exSvcListKeyKey)
+		err = exchange.ServiceListKey(*exOrg, credToUse, *exSvcListKeySvc, *exSvcListKeyKey, exchangeHandler)
 	case exServiceRemKeyCmd.FullCommand():
-		exchange.ServiceRemoveKey(*exOrg, *exUserPw, *exSvcRemKeySvc, *exSvcRemKeyKey)
+		err = exchange.ServiceRemoveKey(*exOrg, *exUserPw, *exSvcRemKeySvc, *exSvcRemKeyKey, exchangeHandler)
 	case exServiceListAuthCmd.FullCommand():
-		exchange.ServiceListAuth(*exOrg, credToUse, *exSvcListAuthSvc, *exSvcListAuthId)
+		err = exchange.ServiceListAuth(*exOrg, credToUse, *exSvcListAuthSvc, *exSvcListAuthId, exchangeHandler)
 	case exServiceRemAuthCmd.FullCommand():
-		exchange.ServiceRemoveAuth(*exOrg, *exUserPw, *exSvcRemAuthSvc, *exSvcRemAuthId)
+		err = exchange.ServiceRemoveAuth(*exOrg, *exUserPw, *exSvcRemAuthSvc, *exSvcRemAuthId, exchangeHandler)
 	case exServiceListPolicyCmd.FullCommand():
-		exchange.ServiceListPolicy(*exOrg, credToUse, *exServiceListPolicyService)
+		err = exchange.ServiceListPolicy(*exOrg, credToUse, *exServiceListPolicyService, exchangeHandler)
 	case exServiceNewPolicyCmd.FullCommand():
-		exchange.ServiceNewPolicy()
+		err = exchange.ServiceNewPolicy()
 	case exServiceAddPolicyCmd.FullCommand():
-		exchange.ServiceAddPolicy(*exOrg, credToUse, *exServiceAddPolicyService, *exServiceAddPolicyJsonFile)
+		err = exchange.ServiceAddPolicy(*exOrg, credToUse, *exServiceAddPolicyService, *exServiceAddPolicyJsonFile, exchangeHandler)
 	case exServiceRemovePolicyCmd.FullCommand():
-		exchange.ServiceRemovePolicy(*exOrg, credToUse, *exServiceRemovePolicyService, *exServiceRemovePolicyForce)
+		err = exchange.ServiceRemovePolicy(*exOrg, credToUse, *exServiceRemovePolicyService, *exServiceRemovePolicyForce, exchangeHandler)
 	case exServiceListnode.FullCommand():
-		exchange.ListServiceNodes(*exOrg, *exUserPw, *exServiceListnodeService, *exServiceListnodeNodeOrg)
+		err = exchange.ListServiceNodes(*exOrg, *exUserPw, *exServiceListnodeService, *exServiceListnodeNodeOrg, exchangeHandler)
 	case exBusinessListPolicyCmd.FullCommand():
-		exchange.BusinessListPolicy(*exOrg, credToUse, *exBusinessListPolicyPolicy, !*exBusinessListPolicyLong)
+		err = exchange.BusinessListPolicy(*exOrg, credToUse, *exBusinessListPolicyPolicy, !*exBusinessListPolicyLong, exchangeHandler)
 	case exBusinessNewPolicyCmd.FullCommand():
 		exchange.BusinessNewPolicy()
 	case exBusinessAddPolicyCmd.FullCommand():
-		exchange.BusinessAddPolicy(*exOrg, credToUse, *exBusinessAddPolicyPolicy, *exBusinessAddPolicyJsonFile, *exBusinessAddPolNoConstraint)
+		err = exchange.BusinessAddPolicy(*exOrg, credToUse, *exBusinessAddPolicyPolicy, *exBusinessAddPolicyJsonFile, *exBusinessAddPolNoConstraint, exchangeHandler)
 	case exBusinessUpdatePolicyCmd.FullCommand():
-		exchange.BusinessUpdatePolicy(*exOrg, credToUse, *exBusinessUpdatePolicyPolicy, *exBusinessUpdatePolicyJsonFile)
+		err = exchange.BusinessUpdatePolicy(*exOrg, credToUse, *exBusinessUpdatePolicyPolicy, *exBusinessUpdatePolicyJsonFile, exchangeHandler)
 	case exBusinessRemovePolicyCmd.FullCommand():
-		exchange.BusinessRemovePolicy(*exOrg, credToUse, *exBusinessRemovePolicyPolicy, *exBusinessRemovePolicyForce)
+		err = exchange.BusinessRemovePolicy(*exOrg, credToUse, *exBusinessRemovePolicyPolicy, *exBusinessRemovePolicyForce, exchangeHandler)
 	case exCatalogServiceListCmd.FullCommand():
-		exchange.CatalogServiceList(*exOrg, *exUserPw, *exCatalogServiceListShort, *exCatalogServiceListLong)
+		err = exchange.CatalogServiceList(*exOrg, *exUserPw, *exCatalogServiceListShort, *exCatalogServiceListLong, exchangeHandler)
 	case exCatalogPatternListCmd.FullCommand():
-		exchange.CatalogPatternList(*exOrg, *exUserPw, *exCatalogPatternListShort, *exCatalogPatternListLong)
+		err = exchange.CatalogPatternList(*exOrg, *exUserPw, *exCatalogPatternListShort, *exCatalogPatternListLong, exchangeHandler)
 	case regInputCmd.FullCommand():
-		register.CreateInputFile(*regInputOrg, *regInputPattern, *regInputArch, *regInputNodeIdTok, *regInputInputFile)
+		err = register.CreateInputFile(*regInputOrg, *regInputPattern, *regInputArch, *regInputNodeIdTok, *regInputInputFile, exchangeHandler)
 	case registerCmd.FullCommand():
-		register.DoIt(*org, *pattern, *nodeIdTok, *userPw, *inputFile, *nodeOrgFlag, *patternFlag, *nodeName, *nodepolicyFlag, *waitServiceFlag, *waitServiceOrgFlag, *waitTimeoutFlag)
+		err = register.DoIt(*org, *pattern, *nodeIdTok, *userPw, *inputFile, *nodeOrgFlag, *patternFlag, *nodeName, *nodepolicyFlag, *waitServiceFlag, *waitServiceOrgFlag, *waitTimeoutFlag, exchangeHandler)
 	case keyListCmd.FullCommand():
-		key.List(*keyName, *keyListAll)
+		err = key.List(*keyName, *keyListAll)
 	case keyCreateCmd.FullCommand():
-		key.Create(*keyX509Org, *keyX509CN, *keyOutputDir, *keyLength, *keyDaysValid, *keyImportFlag, *keyCreatePrivKey, *keyCreatePubKey, *keyCreateOverwrite)
+		err = key.Create(*keyX509Org, *keyX509CN, *keyOutputDir, *keyLength, *keyDaysValid, *keyImportFlag, *keyCreatePrivKey, *keyCreatePubKey, *keyCreateOverwrite)
 	case keyImportCmd.FullCommand():
-		key.Import(*keyImportPubKeyFile)
+		err = key.Import(*keyImportPubKeyFile)
 	case keyDelCmd.FullCommand():
-		key.Remove(*keyDelName)
+		err = key.Remove(*keyDelName)
 	case nodeListCmd.FullCommand():
-		node.List()
+		err = node.List()
 	case policyListCmd.FullCommand():
-		policy.List()
+		err = policy.List()
 	case policyNewCmd.FullCommand():
-		policy.New()
+		err = policy.New()
 	case policyUpdateCmd.FullCommand():
-		policy.Update(*policyUpdateInputFile)
+		err = policy.Update(*policyUpdateInputFile)
 	case policyPatchCmd.FullCommand():
-		policy.Patch(*policyPatchInput)
+		err = policy.Patch(*policyPatchInput)
 	case policyRemoveCmd.FullCommand():
-		policy.Remove(*policyRemoveForce)
+		err = policy.Remove(*policyRemoveForce)
 	case policyCompCmd.FullCommand():
-		deploycheck.PolicyCompatible(*deploycheckOrg, *deploycheckUserPw, *policyCompNodeId, *policyCompNodeArch, *policyCompNodeType, *policyCompNodePolFile, *policyCompBPolId, *policyCompBPolFile, *policyCompSPolFile, *policyCompSvcFile, *deploycheckCheckAll, *deploycheckLong)
+		err = deploycheck.PolicyCompatible(*deploycheckOrg, *deploycheckUserPw, *policyCompNodeId, *policyCompNodeArch, *policyCompNodeType, *policyCompNodePolFile, *policyCompBPolId, *policyCompBPolFile, *policyCompSPolFile, *policyCompSvcFile, *deploycheckCheckAll, *deploycheckLong, exchangeHandler)
 	case userinputCompCmd.FullCommand():
-		deploycheck.UserInputCompatible(*deploycheckOrg, *deploycheckUserPw, *userinputCompNodeId, *userinputCompNodeArch, *userinputCompNodeType, *userinputCompNodeUIFile, *userinputCompBPolId, *userinputCompBPolFile, *userinputCompPatternId, *userinputCompPatternFile, *userinputCompSvcFile, *deploycheckCheckAll, *deploycheckLong)
+		err = deploycheck.UserInputCompatible(*deploycheckOrg, *deploycheckUserPw, *userinputCompNodeId, *userinputCompNodeArch, *userinputCompNodeType, *userinputCompNodeUIFile, *userinputCompBPolId, *userinputCompBPolFile, *userinputCompPatternId, *userinputCompPatternFile, *userinputCompSvcFile, *deploycheckCheckAll, *deploycheckLong, exchangeHandler)
 	case secretCompCmd.FullCommand():
-		deploycheck.SecretBindingCompatible(*deploycheckOrg, *deploycheckUserPw, *secretCompNodeId, *secretCompNodeArch, *secretCompNodeType, *secretCompNodeOrg, *secretCompDepPolId, *secretCompDepPolFile, *secretCompPatternId, *secretCompPatternFile, *secretCompSvcFile, *deploycheckCheckAll, *deploycheckLong)
+		err = deploycheck.SecretBindingCompatible(*deploycheckOrg, *deploycheckUserPw, *secretCompNodeId, *secretCompNodeArch, *secretCompNodeType, *secretCompNodeOrg, *secretCompDepPolId, *secretCompDepPolFile, *secretCompPatternId, *secretCompPatternFile, *secretCompSvcFile, *deploycheckCheckAll, *deploycheckLong, exchangeHandler)
 	case allCompCmd.FullCommand():
-		deploycheck.AllCompatible(*deploycheckOrg, *deploycheckUserPw, *allCompNodeId, *allCompNodeArch, *allCompNodeType, *allCompNodeOrg, *allCompNodePolFile, *allCompNodeUIFile, *allCompBPolId, *allCompBPolFile, *allCompPatternId, *allCompPatternFile, *allCompSPolFile, *allCompSvcFile, *deploycheckCheckAll, *deploycheckLong)
+		err = deploycheck.AllCompatible(*deploycheckOrg, *deploycheckUserPw, *allCompNodeId, *allCompNodeArch, *allCompNodeType, *allCompNodeOrg, *allCompNodePolFile, *allCompNodeUIFile, *allCompBPolId, *allCompBPolFile, *allCompPatternId, *allCompPatternFile, *allCompSPolFile, *allCompSvcFile, *deploycheckCheckAll, *deploycheckLong, exchangeHandler)
 	case agreementListCmd.FullCommand():
-		agreement.List(*listArchivedAgreements, *listAgreementId)
+		err = agreement.List(*listArchivedAgreements, *listAgreementId)
 	case agreementCancelCmd.FullCommand():
-		agreement.Cancel(*cancelAgreementId, *cancelAllAgreements)
+		err = agreement.Cancel(*cancelAgreementId, *cancelAllAgreements)
 	case meteringListCmd.FullCommand():
-		metering.List(*listArchivedMetering)
+		err = metering.List(*listArchivedMetering)
 	case attributeListCmd.FullCommand():
-		attribute.List()
+		err = attribute.List()
 	case userinputListCmd.FullCommand():
-		userinput.List()
+		err = userinput.List()
 	case userinputNewCmd.FullCommand():
-		userinput.New()
+		err = userinput.New()
 	case userinputAddCmd.FullCommand():
-		userinput.Add(*userinputAddFilePath)
+		err = userinput.Add(*userinputAddFilePath)
 	case userinputUpdateCmd.FullCommand():
-		userinput.Update(*userinputUpdateFilePath)
+		err = userinput.Update(*userinputUpdateFilePath)
 	case userinputRemoveCmd.FullCommand():
-		userinput.Remove(*userinputRemoveForce)
+		err = userinput.Remove(*userinputRemoveForce)
 	case serviceListCmd.FullCommand():
-		service.List()
+		err = service.List()
 	case serviceLogCmd.FullCommand():
-		service.Log(*logServiceName, *logServiceVersion, *logServiceContainerName, *logTail)
+		err = service.Log(*logServiceName, *logServiceVersion, *logServiceContainerName, *logTail)
 	case serviceRegisteredCmd.FullCommand():
-		service.Registered()
+		err = service.Registered()
 	case serviceConfigStateListCmd.FullCommand():
-		service.ListConfigState()
+		err = service.ListConfigState()
 	case serviceConfigStateSuspendCmd.FullCommand():
-		service.Suspend(*forceSuspendService, *suspendAllServices, *suspendServiceOrg, *suspendServiceName, *suspendServiceVersion)
+		err = service.Suspend(*forceSuspendService, *suspendAllServices, *suspendServiceOrg, *suspendServiceName, *suspendServiceVersion)
 	case serviceConfigStateActiveCmd.FullCommand():
-		service.Resume(*resumeAllServices, *resumeServiceOrg, *resumeServiceName, *resumeServiceVersion)
+		err = service.Resume(*resumeAllServices, *resumeServiceOrg, *resumeServiceName, *resumeServiceVersion)
 	case unregisterCmd.FullCommand():
-		unregister.DoIt(*forceUnregister, *removeNodeUnregister, *deepCleanUnregister, *timeoutUnregister)
+		err = unregister.DoIt(*forceUnregister, *removeNodeUnregister, *deepCleanUnregister, *timeoutUnregister)
 	case statusCmd.FullCommand():
-		status.DisplayStatus(*statusLong, false)
+		err = status.DisplayStatus(*statusLong, false)
 	case eventlogListCmd.FullCommand():
-		eventlog.List(*listAllEventlogs, *listDetailedEventlogs, *listSelectedEventlogs, *listTail)
+		err = eventlog.List(*listAllEventlogs, *listDetailedEventlogs, *listSelectedEventlogs, *listTail)
 	case surfaceErrorsEventlogs.FullCommand():
-		eventlog.ListSurfaced(*surfaceErrorsEventlogsLong)
+		err = eventlog.ListSurfaced(*surfaceErrorsEventlogsLong)
 	case devServiceNewCmd.FullCommand():
-		dev.ServiceNew(*devHomeDirectory, *devServiceNewCmdOrg, *devServiceNewCmdName, *devServiceNewCmdVer, *devServiceNewCmdImage, *devServiceNewCmdNoImageGen, *devServiceNewCmdCfg, *devServiceNewCmdNoPattern, *devServiceNewCmdNoPolicy)
+		err = dev.ServiceNew(*devHomeDirectory, *devServiceNewCmdOrg, *devServiceNewCmdName, *devServiceNewCmdVer, *devServiceNewCmdImage, *devServiceNewCmdNoImageGen, *devServiceNewCmdCfg, *devServiceNewCmdNoPattern, *devServiceNewCmdNoPolicy)
 	case devServiceStartTestCmd.FullCommand():
-		dev.ServiceStartTest(*devHomeDirectory, *devServiceUserInputFile, *devServiceConfigFile, *devServiceConfigType, *devServiceNoFSS, *devServiceStartCmdUserPw, *devServiceStartSecretsFiles)
+		err = dev.ServiceStartTest(*devHomeDirectory, *devServiceUserInputFile, *devServiceConfigFile, *devServiceConfigType, *devServiceNoFSS, *devServiceStartCmdUserPw, *devServiceStartSecretsFiles, exchangeHandler)
 	case devServiceStopTestCmd.FullCommand():
-		dev.ServiceStopTest(*devHomeDirectory)
+		err = dev.ServiceStopTest(*devHomeDirectory)
 	case devServiceValidateCmd.FullCommand():
-		dev.ServiceValidate(*devHomeDirectory, *devServiceVerifyUserInputFile, []string{}, "", *devServiceValidateCmdUserPw)
+		_, err = dev.ServiceValidate(*devHomeDirectory, *devServiceVerifyUserInputFile, []string{}, "", *devServiceValidateCmdUserPw, exchangeHandler)
 	case devServiceLogCmd.FullCommand():
-		dev.ServiceLog(*devHomeDirectory, *devServiceLogCmdServiceName, *devServiceLogCmdContainerName, *devServiceLogCmdTail)
+		err = dev.ServiceLog(*devHomeDirectory, *devServiceLogCmdServiceName, *devServiceLogCmdContainerName, *devServiceLogCmdTail)
 	case devDependencyFetchCmd.FullCommand():
-		dev.DependencyFetch(*devHomeDirectory, *devDependencyFetchCmdProject, *devDependencyCmdSpecRef, *devDependencyCmdURL, *devDependencyCmdOrg, *devDependencyCmdVersion, *devDependencyCmdArch, *devDependencyFetchCmdUserPw, *devDependencyFetchCmdUserInputFile)
+		err = dev.DependencyFetch(*devHomeDirectory, *devDependencyFetchCmdProject, *devDependencyCmdSpecRef, *devDependencyCmdURL, *devDependencyCmdOrg, *devDependencyCmdVersion, *devDependencyCmdArch, *devDependencyFetchCmdUserPw, *devDependencyFetchCmdUserInputFile, exchangeHandler)
 	case devDependencyListCmd.FullCommand():
-		dev.DependencyList(*devHomeDirectory)
+		err = dev.DependencyList(*devHomeDirectory)
 	case devDependencyRemoveCmd.FullCommand():
-		dev.DependencyRemove(*devHomeDirectory, *devDependencyCmdSpecRef, *devDependencyCmdURL, *devDependencyCmdVersion, *devDependencyCmdArch, *devDependencyCmdOrg)
+		err = dev.DependencyRemove(*devHomeDirectory, *devDependencyCmdSpecRef, *devDependencyCmdURL, *devDependencyCmdVersion, *devDependencyCmdArch, *devDependencyCmdOrg)
 	case agbotAgreementListCmd.FullCommand():
-		agreementbot.AgreementList(*agbotlistArchivedAgreements, *agbotAgreement)
+		err = agreementbot.AgreementList(*agbotlistArchivedAgreements, *agbotAgreement)
 	case agbotAgreementCancelCmd.FullCommand():
-		agreementbot.AgreementCancel(*agbotCancelAgreementId, *agbotCancelAllAgreements)
+		err = agreementbot.AgreementCancel(*agbotCancelAgreementId, *agbotCancelAllAgreements)
 	case agbotListCmd.FullCommand():
-		agreementbot.List()
+		err = agreementbot.List()
 	case agbotPolicyListCmd.FullCommand():
-		agreementbot.PolicyList(*agbotPolicyOrg, *agbotPolicyName)
+		err = agreementbot.PolicyList(*agbotPolicyOrg, *agbotPolicyName)
 	case utilSignCmd.FullCommand():
-		utilcmds.Sign(*utilSignPrivKeyFile)
+		err = utilcmds.Sign(*utilSignPrivKeyFile)
 	case utilVerifyCmd.FullCommand():
-		utilcmds.Verify(*utilVerifyPubKeyFile, *utilVerifySig)
+		err = utilcmds.Verify(*utilVerifyPubKeyFile, *utilVerifySig)
 	case agbotStatusCmd.FullCommand():
-		status.DisplayStatus(*agbotStatusLong, true)
+		err = status.DisplayStatus(*agbotStatusLong, true)
 	case utilConfigConvCmd.FullCommand():
-		utilcmds.ConvertConfig(*utilConfigConvFile)
+		err = utilcmds.ConvertConfig(*utilConfigConvFile)
 	case mmsStatusCmd.FullCommand():
-		sync_service.Status(*mmsOrg, *mmsUserPw)
+		err = sync_service.Status(*mmsOrg, *mmsUserPw, mmsHandler)
 	case mmsObjectListCmd.FullCommand():
-		sync_service.ObjectList(*mmsOrg, *mmsUserPw, *mmsObjectListType, *mmsObjectListId, *mmsObjectListDestinationPolicy, *mmsObjectListDPService, *mmsObjectListDPProperty, *mmsObjectListDPUpdateTime, *mmsObjectListDestinationType, *mmsObjectListDestinationId, *mmsObjectListWithData, *mmsObjectListExpirationTime, *mmsObjectListDeleted, *mmsObjectListLong, *mmsObjectListDetail)
+		err = sync_service.ObjectList(*mmsOrg, *mmsUserPw, *mmsObjectListType, *mmsObjectListId, *mmsObjectListDestinationPolicy, *mmsObjectListDPService, *mmsObjectListDPProperty, *mmsObjectListDPUpdateTime, *mmsObjectListDestinationType, *mmsObjectListDestinationId, *mmsObjectListWithData, *mmsObjectListExpirationTime, *mmsObjectListDeleted, *mmsObjectListLong, *mmsObjectListDetail, mmsHandler)
 	case mmsObjectNewCmd.FullCommand():
-		sync_service.ObjectNew(*mmsOrg)
+		err = sync_service.ObjectNew(*mmsOrg)
 	case mmsObjectPublishCmd.FullCommand():
-		sync_service.ObjectPublish(*mmsOrg, *mmsUserPw, *mmsObjectPublishType, *mmsObjectPublishId, *mmsObjectPublishPat, *mmsObjectPublishDef, *mmsObjectPublishObj, *mmsObjectPublishSkipIntegrityCheck, *mmsObjectPublishDSHashAlgo, *mmsObjectPublishDSHash, *mmsObjectPublishPrivKeyFile)
+		err = sync_service.ObjectPublish(*mmsOrg, *mmsUserPw, *mmsObjectPublishType, *mmsObjectPublishId, *mmsObjectPublishPat, *mmsObjectPublishDef, *mmsObjectPublishObj, *mmsObjectPublishSkipIntegrityCheck, *mmsObjectPublishDSHashAlgo, *mmsObjectPublishDSHash, *mmsObjectPublishPrivKeyFile, mmsHandler)
 	case mmsObjectDeleteCmd.FullCommand():
-		sync_service.ObjectDelete(*mmsOrg, *mmsUserPw, *mmsObjectDeleteType, *mmsObjectDeleteId)
+		err = sync_service.ObjectDelete(*mmsOrg, *mmsUserPw, *mmsObjectDeleteType, *mmsObjectDeleteId, mmsHandler)
 	case mmsObjectDownloadCmd.FullCommand():
-		sync_service.ObjectDownLoad(*mmsOrg, *mmsUserPw, *mmsObjectDownloadType, *mmsObjectDownloadId, *mmsObjectDownloadFile, *mmsObjectDownloadOverwrite, *mmsObjectDownloadSkipIntegrityCheck)
+		err = sync_service.ObjectDownLoad(*mmsOrg, *mmsUserPw, *mmsObjectDownloadType, *mmsObjectDownloadId, *mmsObjectDownloadFile, *mmsObjectDownloadOverwrite, *mmsObjectDownloadSkipIntegrityCheck, mmsHandler)
 
 	// DEPRECATED (voucherInspectCmd, voucherImportCmd, voucherListCmd are deprecated commands)
 	case voucherInspectCmd.FullCommand():
-		sdo.DeprecatedVoucherInspect(*voucherInspectFile)
+		err = sdo.DeprecatedVoucherInspect(*voucherInspectFile)
 	case voucherImportCmd.FullCommand():
-		sdo.DeprecatedVoucherImport(*voucherOrg, *voucherUserPw, *voucherImportFile, *voucherImportExample, *voucherImportPolicy, *voucherImportPattern)
+		err = sdo.DeprecatedVoucherImport(*voucherOrg, *voucherUserPw, *voucherImportFile, *voucherImportExample, *voucherImportPolicy, *voucherImportPattern, exchangeHandler)
 	case voucherListCmd.FullCommand():
-		sdo.DeprecatedVoucherList(*voucherOrg, *voucherUserPw, *voucherToList, !*voucherListLong)
+		err = sdo.DeprecatedVoucherList(*voucherOrg, *voucherUserPw, *voucherToList, !*voucherListLong)
 
 	case sdoKeyCreateCmd.FullCommand():
-		sdo.KeyCreate(*sdoOrg, *sdoUserPw, *sdoKeyCreateInputFile, *sdoKeyCreateFile, *sdoKeyCreateOverwrite)
+		err = sdo.KeyCreate(*sdoOrg, *sdoUserPw, *sdoKeyCreateInputFile, *sdoKeyCreateFile, *sdoKeyCreateOverwrite)
 	case sdoKeyListCmd.FullCommand():
-		sdo.KeyList(*sdoOrg, *sdoUserPw, *sdoKeyToList)
+		err = sdo.KeyList(*sdoOrg, *sdoUserPw, *sdoKeyToList)
 	case sdoKeyDownloadCmd.FullCommand():
-		sdo.KeyDownload(*sdoOrg, *sdoUserPw, *sdoKeyToDownload, *sdoKeyDownloadFile, *sdoKeyDownloadOverwrite)
+		err = sdo.KeyDownload(*sdoOrg, *sdoUserPw, *sdoKeyToDownload, *sdoKeyDownloadFile, *sdoKeyDownloadOverwrite)
 	case sdoKeyRemoveCmd.FullCommand():
-		sdo.KeyRemove(*sdoOrg, *sdoUserPw, *sdoKeyToRemove)
+		err = sdo.KeyRemove(*sdoOrg, *sdoUserPw, *sdoKeyToRemove)
 	case sdoKeyNewCmd.FullCommand():
-		sdo.KeyNew(*sdoKeyNewFile, *sdoKeyNewOverwrite)
+		err = sdo.KeyNew(*sdoKeyNewFile, *sdoKeyNewOverwrite)
 	case sdoVoucherInspectCmd.FullCommand():
-		sdo.VoucherInspect(*sdoVoucherInspectFile)
+		err = sdo.VoucherInspect(*sdoVoucherInspectFile)
 	case sdoVoucherImportCmd.FullCommand():
-		sdo.VoucherImport(*sdoOrg, *sdoUserPw, *sdoVoucherImportFile, *sdoVoucherImportExample, *sdoVoucherImportPolicy, *sdoVoucherImportPattern)
+		err = sdo.VoucherImport(*sdoOrg, *sdoUserPw, *sdoVoucherImportFile, *sdoVoucherImportExample, *sdoVoucherImportPolicy, *sdoVoucherImportPattern, exchangeHandler)
 	case sdoVoucherListCmd.FullCommand():
-		sdo.VoucherList(*sdoOrg, *sdoUserPw, *sdoVoucherToList, !*sdoVoucherListLong)
+		err = sdo.VoucherList(*sdoOrg, *sdoUserPw, *sdoVoucherToList, !*sdoVoucherListLong)
 	case sdoVoucherDownloadCmd.FullCommand():
-		sdo.VoucherDownload(*sdoOrg, *sdoUserPw, *sdoVoucherDownloadDevice, *sdoVoucherDownloadFile, *sdoVoucherDownloadOverwrite)
+		err = sdo.VoucherDownload(*sdoOrg, *sdoUserPw, *sdoVoucherDownloadDevice, *sdoVoucherDownloadFile, *sdoVoucherDownloadOverwrite)
 	case smSecretListCmd.FullCommand():
-		secret_manager.SecretList(*smOrg, *smUserPw, *smSecretListName)
+		err = secret_manager.SecretList(*smOrg, *smUserPw, *smSecretListName, agbotHandler)
 	case smSecretAddCmd.FullCommand():
-		secret_manager.SecretAdd(*smOrg, *smUserPw, *smSecretAddName, *smSecretAddFile, *smSecretAddKey, *smSecretAddDetail, *smSecretAddOverwrite)
+		err = secret_manager.SecretAdd(*smOrg, *smUserPw, *smSecretAddName, *smSecretAddFile, *smSecretAddKey, *smSecretAddDetail, *smSecretAddOverwrite, agbotHandler)
 	case smSecretRemoveCmd.FullCommand():
-		secret_manager.SecretRemove(*smOrg, *smUserPw, *smSecretRemoveName, *smSecretRemoveForce)
+		err = secret_manager.SecretRemove(*smOrg, *smUserPw, *smSecretRemoveName, *smSecretRemoveForce, agbotHandler)
 	case smSecretReadCmd.FullCommand():
-		secret_manager.SecretRead(*smOrg, *smUserPw, *smSecretReadName)
+		err = secret_manager.SecretRead(*smOrg, *smUserPw, *smSecretReadName, agbotHandler)
+	}
+
+	handleError(err)
+}
+
+func handleError(err error) {
+	if err != nil {
+		if cliError, ok := err.(*cliutils.CLIError); ok {
+			cliutils.Fatal(cliError.StatusCode, cliError.Message)
+		} else {
+			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, err.Error())
+		}
 	}
 }

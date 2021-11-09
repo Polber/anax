@@ -41,7 +41,10 @@ func GetUserInputs(homeDirectory string, userInputFile string) (*common.UserInpu
 		}
 	}
 
-	fileBytes := cliconfig.ReadJsonFileWithLocalConfig(userInputFilePath)
+	fileBytes, err := cliconfig.ReadJsonFileWithLocalConfig(userInputFilePath)
+	if err != nil {
+		return nil, "", err
+	}
 
 	userInputs, err := common.NewUserInputFileFromJsonBytes(fileBytes)
 	if err != nil {

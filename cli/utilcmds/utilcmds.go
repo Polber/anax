@@ -10,23 +10,31 @@ import (
 	"os"
 )
 
-func Sign(privKeyFilePath string) {
-	stdinBytes := cliutils.ReadStdin()
+func Sign(privKeyFilePath string) error {
+	stdinBytes, err := cliutils.ReadStdin()
+	if err != nil {
+		return err
+	}
 	signature, err := sign.Input(privKeyFilePath, stdinBytes)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, i18n.GetMessagePrinter().Sprintf("problem signing stdin with %s: %v", privKeyFilePath, err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, i18n.GetMessagePrinter().Sprintf("problem signing stdin with %s: %v", privKeyFilePath, err))
 	}
 	fmt.Println(signature)
+
+	return nil
 }
 
-func Verify(pubKeyFilePath, signature string) {
+func Verify(pubKeyFilePath, signature string) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
-	stdinBytes := cliutils.ReadStdin()
+	stdinBytes, err := cliutils.ReadStdin()
+	if err != nil {
+		return err
+	}
 	verified, err := verify.Input(pubKeyFilePath, signature, stdinBytes)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("problem verifying deployment string with %s: %v", pubKeyFilePath, err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("problem verifying deployment string with %s: %v", pubKeyFilePath, err))
 	} else if !verified {
 		msgPrinter.Printf("This is not a valid signature for stdin.")
 		msgPrinter.Println()
@@ -35,24 +43,26 @@ func Verify(pubKeyFilePath, signature string) {
 		msgPrinter.Printf("Signature is valid.")
 		msgPrinter.Println()
 	}
+
+	return nil
 }
 
 // convert the given json file to shell export commands and output it to stdout
-func ConvertConfig(configFile string) {
+func ConvertConfig(configFile string) error {
 	if configFile == "" {
 		projectConfigFile, err := cliconfig.GetProjectConfigFile("")
 		if err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, i18n.GetMessagePrinter().Sprintf("Failed to get project configuration file. Error: %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, i18n.GetMessagePrinter().Sprintf("Failed to get project configuration file. Error: %v", err))
 		}
 		if projectConfigFile == "" {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, i18n.GetMessagePrinter().Sprintf("Please use the -f flag to specify a configuration file."))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, i18n.GetMessagePrinter().Sprintf("Please use the -f flag to specify a configuration file."))
 		}
 		configFile = projectConfigFile
 	}
 	// get the env vars from the file
 	hzn_vars, metadata_vars, err := cliconfig.GetVarsFromFile(configFile)
 	if err != nil && !os.IsNotExist(err) {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, i18n.GetMessagePrinter().Sprintf("Failed to get the variables from configuration file %v. Error: %v", configFile, err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, i18n.GetMessagePrinter().Sprintf("Failed to get the variables from configuration file %v. Error: %v", configFile, err))
 	}
 
 	// convert it to shell commands
@@ -62,4 +72,6 @@ func ConvertConfig(configFile string) {
 	for k, v := range metadata_vars {
 		fmt.Printf("export %v=%v\n", k, v)
 	}
+
+	return nil
 }

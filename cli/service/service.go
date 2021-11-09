@@ -23,7 +23,7 @@ type OurService struct {
 	Arch    string `json:"arch"`    // The hardware architecture of the service impl
 }
 
-func List() {
+func List() error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -31,7 +31,7 @@ func List() {
 	var apiOutput api.AllServices
 	httpCode, _ := cliutils.HorizonGet("service", []int{200, cliutils.ANAX_NOT_CONFIGURED_YET}, &apiOutput, false)
 	if httpCode == cliutils.ANAX_NOT_CONFIGURED_YET {
-		cliutils.Fatal(cliutils.HTTP_ERROR, msgPrinter.Sprintf(cliutils.MUST_REGISTER_FIRST))
+		return cliutils.CLIError{StatusCode: cliutils.HTTP_ERROR, msgPrinter.Sprintf(cliutils.MUST_REGISTER_FIRST))
 	}
 
 	// Go thru the services and pull out interesting fields
@@ -45,12 +45,14 @@ func List() {
 	// Convert to json and output
 	jsonBytes, err := json.MarshalIndent(services, "", cliutils.JSON_INDENT)
 	if err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn service list' output: %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn service list' output: %v", err))
 	}
 	fmt.Printf("%s\n", jsonBytes)
+
+	return nil
 }
 
-func Log(serviceName string, serviceVersion, containerName string, tailing bool) {
+func Log(serviceName string, serviceVersion, containerName string, tailing bool) error {
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// if node is not registered
@@ -59,7 +61,7 @@ func Log(serviceName string, serviceVersion, containerName string, tailing bool)
 	if horDevice.Org == nil || *horDevice.Org == "" {
 		msgPrinter.Printf("The node is not registered.")
 		msgPrinter.Println()
-		return
+		return nil
 	}
 
 	refUrl := serviceName
@@ -93,9 +95,9 @@ func Log(serviceName string, serviceVersion, containerName string, tailing bool)
 		msgPrinter.Println()
 	} else {
 		if serviceVersion == "" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Service %v is not running on the node.", refUrl))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Service %v is not running on the node.", refUrl))
 		} else {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Service %v version %v is not running on the node.", refUrl, serviceVersion))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Service %v version %v is not running on the node.", refUrl, serviceVersion))
 		}
 	}
 
@@ -107,7 +109,7 @@ func Log(serviceName string, serviceVersion, containerName string, tailing bool)
 			if def.Deployment != "" {
 				deployment := &containermessage.DeploymentDescription{}
 				if err := json.Unmarshal([]byte(def.Deployment), deployment); err != nil {
-					cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Deployment unmarshalling error: %v", err))
+					return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Deployment unmarshalling error: %v", err))
 				}
 
 				if len(deployment.Services) > 1 && containerName == "" {
@@ -115,13 +117,13 @@ func Log(serviceName string, serviceVersion, containerName string, tailing bool)
 					for name, _ := range deployment.Services {
 						cNames = append(cNames, name)
 					}
-					cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Service definition %v consists of more than one container: %v. Please specify the service name by -c flag", serviceName, strings.Join(cNames, ", ")))
+					return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Service definition %v consists of more than one container: %v. Please specify the service name by -c flag", serviceName, strings.Join(cNames, ", ")))
 				}
 				for deployedContainerName, service := range deployment.Services {
 					if containerName == deployedContainerName || (containerName == "" && len(deployment.Services) == 1) {
 						var err error
 						if nonDefaultLogDriverUsed, err = cliutils.ChekServiceLogPossibility(service.LogDriver); err != nil {
-							cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Service logs are unavailable: %v", err))
+							return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Service logs are unavailable: %v", err))
 						}
 						containerName = deployedContainerName
 						containerFound = true
@@ -134,15 +136,15 @@ func Log(serviceName string, serviceVersion, containerName string, tailing bool)
 	}
 	if !containerFound && containerName != "" {
 		if serviceVersion == "" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Container %v is not running as part of service %v.", containerName, serviceName))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Container %v is not running as part of service %v.", containerName, serviceName))
 		} else {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Container %v is not running as part of service %v version.", containerName, serviceName, serviceVersion))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Container %v is not running as part of service %v version.", containerName, serviceName, serviceVersion))
 		}
 	} else if !containerFound {
 		if serviceVersion == "" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Could not find service %v running on the node.", serviceName))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Could not find service %v running on the node.", serviceName))
 		} else {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Could not find service %v version %v running on the node.", serviceName, serviceVersion))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Could not find service %v version %v running on the node.", serviceName, serviceVersion))
 		}
 	} else {
 		msgPrinter.Printf("Displaying log messages of container %v for service %v with service id %v.", containerName, name, instanceId)
@@ -158,9 +160,11 @@ func Log(serviceName string, serviceVersion, containerName string, tailing bool)
 	} else {
 		cliutils.LogLinux(instanceId+"_"+containerName, tailing)
 	}
+
+	return nil
 }
 
-func Registered() {
+func Registered() error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -168,36 +172,40 @@ func Registered() {
 	apiOutput := make(map[string]policy.Policy)
 	httpCode, _ := cliutils.HorizonGet("service/policy", []int{200, cliutils.ANAX_NOT_CONFIGURED_YET}, &apiOutput, false)
 	if httpCode == cliutils.ANAX_NOT_CONFIGURED_YET {
-		cliutils.Fatal(cliutils.HTTP_ERROR, msgPrinter.Sprintf(cliutils.MUST_REGISTER_FIRST))
+		return cliutils.CLIError{StatusCode: cliutils.HTTP_ERROR, msgPrinter.Sprintf(cliutils.MUST_REGISTER_FIRST))
 	}
 
 	// Convert to json and output
 	jsonBytes, err := json.MarshalIndent(apiOutput, "", cliutils.JSON_INDENT)
 	if err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn service registered' output: %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn service registered' output: %v", err))
 	}
 	fmt.Printf("%s\n", jsonBytes)
+
+	return nil
 }
 
-func ListConfigState() {
+func ListConfigState() error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	apiOutput := make(map[string][]exchange.ServiceConfigState)
 	httpCode, _ := cliutils.HorizonGet("service/configstate", []int{200, cliutils.ANAX_NOT_CONFIGURED_YET}, &apiOutput, false)
 	if httpCode == cliutils.ANAX_NOT_CONFIGURED_YET {
-		cliutils.Fatal(cliutils.HTTP_ERROR, msgPrinter.Sprintf(cliutils.MUST_REGISTER_FIRST))
+		return cliutils.CLIError{StatusCode: cliutils.HTTP_ERROR, msgPrinter.Sprintf(cliutils.MUST_REGISTER_FIRST))
 	}
 
 	// Convert to json and output
 	jsonBytes, err := json.MarshalIndent(apiOutput, "", cliutils.JSON_INDENT)
 	if err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn service configstate' output: %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn service configstate' output: %v", err))
 	}
 	fmt.Printf("%s\n", jsonBytes)
+
+	return nil
 }
 
-func Suspend(forceSuspend bool, applyAll bool, serviceOrg string, serviceUrl string, serviceVer string) {
+func Suspend(forceSuspend bool, applyAll bool, serviceOrg string, serviceUrl string, serviceVer string) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -209,7 +217,7 @@ func Suspend(forceSuspend bool, applyAll bool, serviceOrg string, serviceUrl str
 					if semanticversion.IsVersionString(serviceVer) {
 						msg_part = msgPrinter.Sprintf("service %v/%v version %v", serviceOrg, serviceUrl, serviceVer)
 					} else {
-						cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid version format: %v.", serviceVer))
+						return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid version format: %v.", serviceVer))
 					}
 				} else {
 					msg_part = msgPrinter.Sprintf("all the versions for service %v/%v", serviceOrg, serviceUrl)
@@ -218,11 +226,11 @@ func Suspend(forceSuspend bool, applyAll bool, serviceOrg string, serviceUrl str
 				if serviceVer == "" {
 					msg_part = msgPrinter.Sprintf("all the registered services from organization %v", serviceOrg)
 				} else {
-					cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Please specify the service name for version %v.", serviceVer))
+					return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Please specify the service name for version %v.", serviceVer))
 				}
 			}
 		} else if serviceUrl != "" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Please specify the organization for service %v.", serviceUrl))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Please specify the organization for service %v.", serviceUrl))
 		}
 	}
 
@@ -254,9 +262,11 @@ func Suspend(forceSuspend bool, applyAll bool, serviceOrg string, serviceUrl str
 		msgPrinter.Printf("Error: %v", err)
 	}
 	msgPrinter.Println()
+
+	return nil
 }
 
-func Resume(applyAll bool, serviceOrg string, serviceUrl string, serviceVer string) {
+func Resume(applyAll bool, serviceOrg string, serviceUrl string, serviceVer string) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -268,7 +278,7 @@ func Resume(applyAll bool, serviceOrg string, serviceUrl string, serviceVer stri
 					if semanticversion.IsVersionString(serviceVer) {
 						msg_part = msgPrinter.Sprintf("service %v/%v version %v", serviceOrg, serviceUrl, serviceVer)
 					} else {
-						cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid version format: %v.", serviceVer))
+						return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid version format: %v.", serviceVer))
 					}
 				} else {
 					msg_part = msgPrinter.Sprintf("all the versions for service %v/%v", serviceOrg, serviceUrl)
@@ -277,11 +287,11 @@ func Resume(applyAll bool, serviceOrg string, serviceUrl string, serviceVer stri
 				if serviceVer == "" {
 					msg_part = msgPrinter.Sprintf("all the registered services from organization %v", serviceOrg)
 				} else {
-					cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Please specify the service name for version %v.", serviceVer))
+					return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Please specify the service name for version %v.", serviceVer))
 				}
 			}
 		} else if serviceUrl != "" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Please specify the organization for service %v.", serviceUrl))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Please specify the organization for service %v.", serviceUrl))
 		}
 	}
 
@@ -310,4 +320,6 @@ func Resume(applyAll bool, serviceOrg string, serviceUrl string, serviceVer stri
 		msgPrinter.Printf("Error: %v", err)
 	}
 	msgPrinter.Println()
+
+	return nil
 }

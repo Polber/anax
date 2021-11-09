@@ -116,13 +116,15 @@ func (p *HelmDeploymentConfigPlugin) Validate(dep interface{}, cdep interface{})
 	}
 }
 
-func (p *HelmDeploymentConfigPlugin) StartTest(homeDirectory string, userInputFile string, configFiles []string, configType string, noFSS bool, userCreds string, secretsFiles map[string]string) bool {
+func (p *HelmDeploymentConfigPlugin) StartTest(homeDirectory string, userInputFile string, configFiles []string, configType string, noFSS bool, userCreds string, secretsFiles map[string]string, exchangeHandler cliutils.ServiceHandler) (bool, error) {
 
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// Run verification before trying to start anything.
-	dev.ServiceValidate(homeDirectory, userInputFile, configFiles, configType, userCreds)
+	if _, err := dev.ServiceValidate(homeDirectory, userInputFile, configFiles, configType, userCreds, exchangeHandler); err != nil {
+		return false, err
+	}
 
 	// Perform the common execution setup.
 	dir, _, _ := dev.CommonExecutionSetup(homeDirectory, userInputFile, dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND)
@@ -130,18 +132,18 @@ func (p *HelmDeploymentConfigPlugin) StartTest(homeDirectory string, userInputFi
 	// Get the service definition, so that we can look at the user input variable definitions.
 	serviceDef, sderr := dev.GetServiceDefinition(dir, dev.SERVICE_DEFINITION_FILE)
 	if sderr != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, fmt.Sprintf("'%v %v' %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, sderr))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, fmt.Sprintf("'%v %v' %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, sderr))
 	}
 
 	// Now that we have the service def, we can check if we own the deployment config object.
 	if owned, err := p.Validate(serviceDef.Deployment, nil); !owned || err != nil {
-		return false
+		return false, nil
 	}
 
-	cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' not supported for Helm deployments", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND))
+	return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' not supported for Helm deployments", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND))
 
 	// For the compiler
-	return true
+	return true, nil
 }
 
 func (p *HelmDeploymentConfigPlugin) StopTest(homeDirectory string) bool {
@@ -155,7 +157,7 @@ func (p *HelmDeploymentConfigPlugin) StopTest(homeDirectory string) bool {
 	// Get the service definition, so that we can look at the user input variable definitions.
 	serviceDef, sderr := dev.GetServiceDefinition(dir, dev.SERVICE_DEFINITION_FILE)
 	if sderr != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, fmt.Sprintf("'%v %v' %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, sderr))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, fmt.Sprintf("'%v %v' %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, sderr))
 	}
 
 	// Now that we have the service def, we can check if we own the deployment config object.
@@ -163,7 +165,7 @@ func (p *HelmDeploymentConfigPlugin) StopTest(homeDirectory string) bool {
 		return false
 	}
 
-	cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' not supported for Helm deployments", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND))
+	return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' not supported for Helm deployments", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND))
 
 	// For the compiler
 	return true

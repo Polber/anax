@@ -11,7 +11,7 @@ import (
 	"net/http"
 )
 
-func List() {
+func List() error {
 	// Get the node policy info
 	nodePolicy := exchangecommon.NodePolicy{}
 	cliutils.HorizonGet("node/policy", []int{200}, &nodePolicy, false)
@@ -19,13 +19,15 @@ func List() {
 	// Output the combined info
 	output, err := cliutils.DisplayAsJson(nodePolicy)
 	if err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal 'hzn policy list' output: %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal 'hzn policy list' output: %v", err))
 	}
 
 	fmt.Println(output)
+
+	return nil
 }
 
-func Update(fileName string) {
+func Update(fileName string) error {
 	msgPrinter := i18n.GetMessagePrinter()
 
 	ep := new(exchangecommon.NodePolicy)
@@ -58,9 +60,10 @@ func Update(fileName string) {
 	msgPrinter.Printf("Updating Horizon node policy and re-evaluating all agreements based on this node policy. Existing agreements might be cancelled and re-negotiated.")
 	msgPrinter.Println()
 
+	return nil
 }
 
-func Patch(patch string) {
+func Patch(patch string) error {
 	msgPrinter := i18n.GetMessagePrinter()
 	msgPrinter.Printf("Warning: This command is deprecated. It will continue to be supported until the next major release. Please use 'hzn policy update' to update the node policy.")
 	msgPrinter.Println()
@@ -69,30 +72,41 @@ func Patch(patch string) {
 
 	msgPrinter.Printf("Horizon node policy updated.")
 	msgPrinter.Println()
+
+	return nil
 }
 
-func readInputFile(filePath string, inputFileStruct *exchangecommon.NodePolicy) {
-	newBytes := cliconfig.ReadJsonFileWithLocalConfig(filePath)
-	err := json.Unmarshal(newBytes, inputFileStruct)
+func readInputFile(filePath string, inputFileStruct *exchangecommon.NodePolicy) error {
+	newBytes, err := cliconfig.ReadJsonFileWithLocalConfig(filePath)
 	if err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to unmarshal json input file %s: %v", filePath, err))
+		return err
 	}
+	err = json.Unmarshal(newBytes, inputFileStruct)
+	if err != nil {
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to unmarshal json input file %s: %v", filePath, err))
+	}
+
+	return nil
 }
 
-func Remove(force bool) {
+func Remove(force bool) error {
 	if !force {
 		cliutils.ConfirmRemove(i18n.GetMessagePrinter().Sprintf("Are you sure you want to remove the node policy?"))
 	}
 
 	msgPrinter := i18n.GetMessagePrinter()
-	cliutils.HorizonDelete("node/policy", []int{200, 204}, []int{}, false)
+	if _, err := cliutils.HorizonDelete("node/policy", []int{200, 204}, []int{}, false); err != nil {
+		return err
+	}
 
 	msgPrinter.Printf("Removing Horizon node policy and re-evaluating all agreements. Existing agreements might be cancelled and re-negotiated.")
 	msgPrinter.Println()
+
+	return nil
 }
 
 // Display an empty policy template as an object.
-func New() {
+func New() error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -144,4 +158,6 @@ func New() {
 	for _, s := range policy_template {
 		fmt.Println(s)
 	}
+
+	return nil
 }

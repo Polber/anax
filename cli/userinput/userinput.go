@@ -11,18 +11,20 @@ import (
 )
 
 //Display a list of the current userInputs of the node
-func List() {
+func List() error {
 	var inputs []policy.UserInput
 	cliutils.HorizonGet("node/userinput", []int{200}, &inputs, false)
 
 	output, err := cliutils.DisplayAsJson(inputs)
 	if err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("Unable to marshal userinput object: %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("Unable to marshal userinput object: %v", err))
 	}
 	fmt.Println(output)
+
+	return nil
 }
 
-func New() {
+func New() error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -46,46 +48,58 @@ func New() {
 	for _, s := range uerinput_template {
 		fmt.Println(s)
 	}
+
+	return nil
 }
 
 //Add or overwrite the userinputs for this node
-func Add(filePath string) {
+func Add(filePath string) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	var inputs []policy.UserInput
-	inputString := cliconfig.ReadJsonFileWithLocalConfig(filePath)
-
-	err := json.Unmarshal([]byte(inputString), &inputs)
+	inputString, err := cliconfig.ReadJsonFileWithLocalConfig(filePath)
 	if err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("Error unmarshaling userInput json file: %v", err))
+		return err
+	}
+
+	err = json.Unmarshal([]byte(inputString), &inputs)
+	if err != nil {
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("Error unmarshaling userInput json file: %v", err))
 	}
 
 	cliutils.HorizonPutPost(http.MethodPost, "node/userinput", []int{200, 201}, inputs, true)
 	msgPrinter.Printf("Horizon node user inputs updated.")
 	msgPrinter.Println()
+
+	return nil
 }
 
 //Update the userinputs for this node
-func Update(filePath string) {
+func Update(filePath string) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	var inputs []policy.UserInput
-	inputString := cliconfig.ReadJsonFileWithLocalConfig(filePath)
-
-	err := json.Unmarshal([]byte(inputString), &inputs)
+	inputString, err := cliconfig.ReadJsonFileWithLocalConfig(filePath)
 	if err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("Error unmarshaling userInput json file: %v", err))
+		return err
+	}
+
+	err = json.Unmarshal([]byte(inputString), &inputs)
+	if err != nil {
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("Error unmarshaling userInput json file: %v", err))
 	}
 
 	cliutils.HorizonPutPost(http.MethodPatch, "node/userinput", []int{200, 201}, inputs, true)
 	msgPrinter.Printf("Horizon node user inputs updated.")
 	msgPrinter.Println()
+
+	return nil
 }
 
 //Remove the user inputs for this nose
-func Remove(force bool) {
+func Remove(force bool) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -97,4 +111,6 @@ func Remove(force bool) {
 
 	msgPrinter.Printf("Horizon user inputs removed.")
 	msgPrinter.Println()
+
+	return nil
 }

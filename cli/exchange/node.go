@@ -16,7 +16,6 @@ import (
 	"github.com/open-horizon/anax/persistence"
 	"github.com/open-horizon/anax/policy"
 	"github.com/open-horizon/anax/semanticversion"
-	"net/http"
 	"os"
 )
 
@@ -50,43 +49,54 @@ type ExchangeNodeStatus struct {
 	LastUpdated     string                `json:"lastUpdated,omitempty"`
 }
 
-func NodeList(org string, credToUse string, node string, namesOnly bool) {
+func NodeList(org string, credToUse string, node string, namesOnly bool, exchangeHandler cliutils.ServiceHandler) error {
 	cliutils.SetWhetherUsingApiKey(credToUse)
 	var nodeOrg string
-	nodeOrg, node = cliutils.TrimOrg(org, node)
+	var err error
+	if nodeOrg, node, err = cliutils.TrimOrg(org, node); err != nil {
+		return err
+	}
 	if node == "*" {
 		node = ""
 	}
 	if namesOnly && node == "" {
 		// Only display the names
 		var resp ExchangeNodes
-		cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), "orgs/"+nodeOrg+"/nodes"+cliutils.AddSlash(node), cliutils.OrgAndCreds(org, credToUse), []int{200, 404}, &resp)
+		if _, err := exchangeHandler.Get("orgs/"+nodeOrg+"/nodes"+cliutils.AddSlash(node), cliutils.OrgAndCreds(org, credToUse), &resp); err != nil {
+			return err
+		}
 		nodes := []string{}
 		for n := range resp.Nodes {
 			nodes = append(nodes, n)
 		}
 		jsonBytes, err := json.MarshalIndent(nodes, "", cliutils.JSON_INDENT)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal 'exchange node list' output: %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal 'exchange node list' output: %v", err))
 		}
 		fmt.Printf("%s\n", jsonBytes)
 	} else {
 		// Display the full resources
 		var nodes ExchangeNodes
-		httpCode := cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), "orgs/"+nodeOrg+"/nodes"+cliutils.AddSlash(node), cliutils.OrgAndCreds(org, credToUse), []int{200, 404}, &nodes)
-		if httpCode == 404 && node != "" {
-			cliutils.Fatal(cliutils.NOT_FOUND, i18n.GetMessagePrinter().Sprintf("node '%s' not found in org %s", node, nodeOrg))
+		if httpCode, err := exchangeHandler.Get("orgs/"+nodeOrg+"/nodes"+cliutils.AddSlash(node), cliutils.OrgAndCreds(org, credToUse), &nodes); err != nil {
+			return err
+		} else if httpCode == 404 && node != "" {
+			return cliutils.CLIError{StatusCode: cliutils.NOT_FOUND, i18n.GetMessagePrinter().Sprintf("node '%s' not found in org %s", node, nodeOrg))
 		}
-		output := cliutils.MarshalIndent(nodes.Nodes, "exchange node list")
+		output, err := cliutils.MarshalIndent(nodes.Nodes, "exchange node list")
+		if err != nil {
+			return err
+		}
 		fmt.Println(output)
 	}
+
+	return nil
 }
 
 // Create a node with the given information.
 // The function will check if the node exists. If it exists, then only the token will be updated.
 // If checkNode is false, it means that the node existance has been check somewhere else, the function will
 // assume the node does not exist.
-func NodeCreate(org, nodeIdTok, node, token, userPw, arch string, nodeName string, nodeType string, checkNode bool) {
+func NodeCreate(org, nodeIdTok, node, token, userPw, arch string, nodeName string, nodeType string, checkNode bool, exchangeHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -94,18 +104,18 @@ func NodeCreate(org, nodeIdTok, node, token, userPw, arch string, nodeName strin
 	var nodeId, nodeToken string
 	if node != "" || token != "" {
 		if node == "" || token == "" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("if node or token are specified then they both must be specified"))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("if node or token are specified then they both must be specified"))
 		}
 		// at this point we know both node and token were specified
 		if nodeIdTok != "" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("do not specify both the -n flag and the node and token positional arguments. They mean the same thing."))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("do not specify both the -n flag and the node and token positional arguments. They mean the same thing."))
 		}
 		nodeId = node
 		nodeToken = token
 	} else {
 		// here we know neither node nor token were specified
 		if nodeIdTok == "" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("either the node and token positional arguments, or the -n flag must be specified."))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("either the node and token positional arguments, or the -n flag must be specified."))
 		}
 		nodeId, nodeToken = cliutils.SplitIdToken(nodeIdTok)
 	}
@@ -115,27 +125,28 @@ func NodeCreate(org, nodeIdTok, node, token, userPw, arch string, nodeName strin
 	}
 
 	cliutils.SetWhetherUsingApiKey(userPw)
-	exchUrlBase := cliutils.GetExchangeUrl()
 
 	// validate the node type
 	if nodeType != "" && nodeType != persistence.DEVICE_TYPE_DEVICE && nodeType != persistence.DEVICE_TYPE_CLUSTER {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Wrong node type specified: %v. It must be 'device' or 'cluster'.", nodeType))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Wrong node type specified: %v. It must be 'device' or 'cluster'.", nodeType))
 	}
 
 	//Check if the node exists or not
 	var nodes ExchangeNodes
 	nodeExists := false
 	if checkNode {
-		httpCode := cliutils.ExchangeGet("Exchange", exchUrlBase, "orgs/"+org+"/nodes/"+nodeId, cliutils.OrgAndCreds(org, userPw), []int{200, 404, 401}, &nodes)
-		if httpCode == 401 {
+		if httpCode, err := exchangeHandler.Get("orgs/"+org+"/nodes/"+nodeId, cliutils.OrgAndCreds(org, userPw), &nodes); err != nil {
+			return err
+		} else if httpCode == 401 {
 			// Invalid creds means the user doesn't exist, or pw is wrong
 			user, _ := cliutils.SplitIdToken(userPw)
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("user '%s' does not exist with the specified password.", user))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("user '%s' does not exist with the specified password.", user))
 		} else if httpCode == 200 {
 			nodeExists = true
 		}
 	}
 
+	var err error
 	var httpCode int
 	var resp struct {
 		Code string `json:"code"`
@@ -149,32 +160,38 @@ func NodeCreate(org, nodeIdTok, node, token, userPw, arch string, nodeName strin
 			msgPrinter.Println()
 		}
 		patchNodeReq := NodeExchangePatchToken{Token: nodeToken}
-		httpCode = cliutils.ExchangePutPost("Exchange", http.MethodPatch, cliutils.GetExchangeUrl(), "orgs/"+org+"/nodes/"+nodeId, cliutils.OrgAndCreds(org, userPw), []int{201, 401, 403}, patchNodeReq, &resp)
+		if httpCode, err = exchangeHandler.Patch("orgs/"+org+"/nodes/"+nodeId, cliutils.OrgAndCreds(org, userPw), patchNodeReq, &resp); err != nil {
+			return err
+		}
 	} else {
 		// create the node with given node type
 		if nodeType == "" {
 			nodeType = persistence.DEVICE_TYPE_DEVICE
 		}
 		putNodeReq := exchange.PutDeviceRequest{Token: nodeToken, Name: nodeName, NodeType: nodeType, SoftwareVersions: make(map[string]string), PublicKey: []byte(""), Arch: arch}
-		httpCode = cliutils.ExchangePutPost("Exchange", http.MethodPut, exchUrlBase, "orgs/"+org+"/nodes/"+nodeId+"?"+cliutils.NOHEARTBEAT_PARAM, cliutils.OrgAndCreds(org, userPw), []int{201, 401, 403}, putNodeReq, &resp)
+		if httpCode, err = exchangeHandler.Put("orgs/"+org+"/nodes/"+nodeId+"?"+cliutils.NOHEARTBEAT_PARAM, cliutils.OrgAndCreds(org, userPw), putNodeReq, &resp); err != nil {
+			return err
+		}
 	}
 
 	if httpCode == 401 {
 		// Invalid creds means the user doesn't exist, or pw is wrong
 		user, _ := cliutils.SplitIdToken(userPw)
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("user '%s' does not exist with the specified password.", user))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("user '%s' does not exist with the specified password.", user))
 	} else if httpCode == 403 {
 		// Access denied means either the node exists and is owned by another user or it doesn't exist but user reached the maxNodes threshold.
 		var nodesOutput exchange.GetDevicesResponse
-		httpCode = cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), "orgs/"+org+"/nodes/"+nodeId, cliutils.OrgAndCreds(org, userPw), []int{200, 404}, &nodesOutput)
+		if httpCode, err = exchangeHandler.Get("orgs/"+org+"/nodes/"+nodeId, cliutils.OrgAndCreds(org, userPw), &nodesOutput); err != nil {
+			return err
+		}
 		if httpCode == 200 {
 			// Node exists. Figure out who is the owner and tell the user
 			var ok bool
 			var ourNode exchange.Device
 			if ourNode, ok = nodesOutput.Devices[cliutils.OrgAndCreds(org, nodeId)]; !ok {
-				cliutils.Fatal(cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("key '%s' not found in exchange nodes output", cliutils.OrgAndCreds(org, nodeId)))
+				return cliutils.CLIError{StatusCode: cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("key '%s' not found in exchange nodes output", cliutils.OrgAndCreds(org, nodeId)))
 			}
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("can not update existing node %s because it is owned by another user (%s)", nodeId, ourNode.Owner))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("can not update existing node %s because it is owned by another user (%s)", nodeId, ourNode.Owner))
 		} else if httpCode == 404 {
 			// Node doesn't exist. MaxNodes reached or 403 means real access denied, display the message from the exchange
 			if resp.Msg != "" {
@@ -193,34 +210,43 @@ func NodeCreate(org, nodeIdTok, node, token, userPw, arch string, nodeName strin
 			msgPrinter.Println()
 		}
 	}
+
+	return nil
 }
 
-func NodeUpdate(org string, credToUse string, node string, filePath string) {
+func NodeUpdate(org string, credToUse string, node string, filePath string, exchangeHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	cliutils.SetWhetherUsingApiKey(credToUse)
 	var nodeOrg string
-	nodeOrg, node = cliutils.TrimOrg(org, node)
+	var err error
+	if nodeOrg, node, err = cliutils.TrimOrg(org, node); err != nil {
+		return err
+	}
 
 	//check that the node exists
 	var nodeReq ExchangeNodes
-	httpCode := cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), "orgs/"+nodeOrg+"/nodes/"+node, cliutils.OrgAndCreds(org, credToUse), []int{200, 404}, &nodeReq)
-	if httpCode == 404 {
-		cliutils.Fatal(cliutils.NOT_FOUND, msgPrinter.Sprintf("Node %s/%s not found in the Horizon Exchange.", nodeOrg, node))
+	if httpCode, err := exchangeHandler.Get("orgs/"+nodeOrg+"/nodes/"+node, cliutils.OrgAndCreds(org, credToUse), &nodeReq); err != nil {
+		return err
+	} else if httpCode == 404 {
+		return cliutils.CLIError{StatusCode: cliutils.NOT_FOUND, msgPrinter.Sprintf("Node %s/%s not found in the Horizon Exchange.", nodeOrg, node))
 	}
 
-	attribute := cliconfig.ReadJsonFileWithLocalConfig(filePath)
+	attribute, err := cliconfig.ReadJsonFileWithLocalConfig(filePath)
+	if err != nil {
+		return err
+	}
 
 	findPatchType := make(map[string]interface{})
 	if err := json.Unmarshal([]byte(attribute), &findPatchType); err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal attribute: %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal attribute: %v", err))
 	}
 
 	// check invalid attributes
 	for k, _ := range findPatchType {
 		if k != "userInput" && k != "pattern" && k != "heartbeatIntervals" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Cannot update attribute %v. Supported attributes are: userInput, pattern, heartbeatIntervals.", k))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Cannot update attribute %v. Supported attributes are: userInput, pattern, heartbeatIntervals.", k))
 		}
 	}
 
@@ -228,19 +254,19 @@ func NodeUpdate(org string, credToUse string, node string, filePath string) {
 	for k, v := range findPatchType {
 		bytes, err := json.Marshal(v)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal attribute input %s: %v", v, err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal attribute input %s: %v", v, err))
 		}
 		patch := make(map[string]interface{})
 		if k == "userInput" {
 			ui := []policy.UserInput{}
 			if err := json.Unmarshal(bytes, &ui); err != nil {
-				cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal attribute input %s: %v", v, err))
+				return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal attribute input %s: %v", v, err))
 			}
 			// validate userInput
 			// if node has a pattern, check the service is defined in top level services
 			nodes := nodeReq.Nodes
 			if len(nodes) != 1 {
-				cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Expecting 1 exchange node, but get %d nodes", len(nodes)))
+				return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Expecting 1 exchange node, but get %d nodes", len(nodes)))
 			}
 
 			var node exchange.Device
@@ -261,14 +287,14 @@ func NodeUpdate(org string, credToUse string, node string, filePath string) {
 		} else if k == "pattern" {
 			pattern := ""
 			if err := json.Unmarshal(bytes, &pattern); err != nil {
-				cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal pattern attribute input %s: %v", v, err))
+				return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal pattern attribute input %s: %v", v, err))
 			} else {
 				patch[k] = pattern
 			}
 		} else if k == "heartbeatIntervals" {
 			hb := exchange.HeartbeatIntervals{}
 			if err := json.Unmarshal(bytes, &hb); err != nil {
-				cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal heartbeat input %s: %v", v, err))
+				return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal heartbeat input %s: %v", v, err))
 			} else {
 				patch[k] = hb
 			}
@@ -276,7 +302,9 @@ func NodeUpdate(org string, credToUse string, node string, filePath string) {
 
 		msgPrinter.Printf("Updating %v for node %v/%v in the Horizon Exchange.", k, nodeOrg, node)
 		msgPrinter.Println()
-		cliutils.ExchangePutPost("Exchange", http.MethodPatch, cliutils.GetExchangeUrl(), "orgs/"+nodeOrg+"/nodes/"+node, cliutils.OrgAndCreds(org, credToUse), []int{200, 201}, patch, nil)
+		if _, err := exchangeHandler.Patch("orgs/"+nodeOrg+"/nodes/"+node, cliutils.OrgAndCreds(org, credToUse), patch, nil); err != nil {
+			return err
+		}
 		msgPrinter.Printf("Attribute %v updated.", k)
 		msgPrinter.Println()
 
@@ -289,10 +317,10 @@ func NodeUpdate(org string, credToUse string, node string, filePath string) {
 			var exchNode exchange.Device
 			bytes, err := json.Marshal(v)
 			if err != nil {
-				cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal attribute input %s: %v", v, err))
+				return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal attribute input %s: %v", v, err))
 			}
 			if err := json.Unmarshal(bytes, &exchNode); err != nil {
-				cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal exchange node %s: %v", v, err))
+				return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal exchange node %s: %v", v, err))
 			}
 
 			// the exchange node is registered with a device and the update is not heartbeat interval, then give user more info.
@@ -308,6 +336,8 @@ func NodeUpdate(org string, credToUse string, node string, filePath string) {
 			break
 		}
 	}
+
+	return nil
 }
 
 type NodeExchangePatchName struct {
@@ -318,15 +348,22 @@ type NodeExchangePatchToken struct {
 	Token string `json:"token"`
 }
 
-func NodeSetToken(org, credToUse, node, token string) {
+func NodeSetToken(org, credToUse, node, token string, exchangeHandler cliutils.ServiceHandler) error {
 	cliutils.SetWhetherUsingApiKey(credToUse)
 	var nodeOrg string
-	nodeOrg, node = cliutils.TrimOrg(org, node)
+	var err error
+	if nodeOrg, node, err = cliutils.TrimOrg(org, node); err != nil {
+		return err
+	}
 	patchNodeReq := NodeExchangePatchToken{Token: token}
-	cliutils.ExchangePutPost("Exchange", http.MethodPatch, cliutils.GetExchangeUrl(), "orgs/"+nodeOrg+"/nodes/"+node, cliutils.OrgAndCreds(org, credToUse), []int{201}, patchNodeReq, nil)
+	if _, err := exchangeHandler.Patch("orgs/"+nodeOrg+"/nodes/"+node, cliutils.OrgAndCreds(org, credToUse), patchNodeReq, nil); err != nil {
+		return err
+	}
+	
+	return nil
 }
 
-func NodeConfirm(org, node, token string, nodeIdTok string) {
+func NodeConfirm(org, node, token string, nodeIdTok string, exchangeHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -335,7 +372,7 @@ func NodeConfirm(org, node, token string, nodeIdTok string) {
 	// check the input
 	if nodeIdTok != "" {
 		if node != "" || token != "" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("-n is mutually exclusive with <node> and <token> arguments."))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("-n is mutually exclusive with <node> and <token> arguments."))
 		}
 	} else {
 		if node == "" && token == "" {
@@ -343,92 +380,116 @@ func NodeConfirm(org, node, token string, nodeIdTok string) {
 		}
 	}
 
+	var err error
 	if nodeIdTok != "" {
 		node, token = cliutils.SplitIdToken(nodeIdTok)
 		if node != "" {
 			// trim the org off the node id. the HZN_EXCHANGE_NODE_AUTH may contain the org id.
-			_, node = cliutils.TrimOrg(org, node)
+			if _, node, err = cliutils.TrimOrg(org, node); err != nil {
+				return err
+			}
 		}
 	}
 
 	if node == "" || token == "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Please specify both node and token."))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Please specify both node and token."))
 	}
 
-	httpCode := cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), "orgs/"+org+"/nodes/"+node, cliutils.OrgAndCreds(org, node+":"+token), []int{200}, nil)
-	if httpCode == 200 {
+	if httpCode, err := exchangeHandler.Get("orgs/"+org+"/nodes/"+node, cliutils.OrgAndCreds(org, node+":"+token), nil); err != nil {
+		return err
+	} else if httpCode == 200 {
 		msgPrinter.Printf("Node id and token are valid.")
 		msgPrinter.Println()
 	}
 	// else cliutils.ExchangeGet() already gave the error msg
+
+	return nil
 }
 
-func NodeRemove(org, credToUse, node string, force bool) {
+func NodeRemove(org, credToUse, node string, force bool, exchangeHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	cliutils.SetWhetherUsingApiKey(credToUse)
 	var nodeOrg string
-	nodeOrg, node = cliutils.TrimOrg(org, node)
+	var err error
+	if nodeOrg, node, err = cliutils.TrimOrg(org, node); err != nil {
+		return err
+	}
 
 	if !force {
 		cliutils.ConfirmRemove(msgPrinter.Sprintf("Are you sure you want to remove node %v/%v from the Horizon Exchange?", nodeOrg, node))
 	}
 
-	httpCode := cliutils.ExchangeDelete("Exchange", cliutils.GetExchangeUrl(), "orgs/"+nodeOrg+"/nodes/"+node, cliutils.OrgAndCreds(org, credToUse), []int{204, 404})
-	if httpCode == 404 {
-		cliutils.Fatal(cliutils.NOT_FOUND, msgPrinter.Sprintf("node '%s' not found in org %s", node, nodeOrg))
+	if httpCode, err := exchangeHandler.Delete("orgs/"+nodeOrg+"/nodes/"+node, cliutils.OrgAndCreds(org, credToUse)); err != nil {
+		return err
+	} else if httpCode == 404 {
+		return cliutils.CLIError{StatusCode: cliutils.NOT_FOUND, msgPrinter.Sprintf("node '%s' not found in org %s", node, nodeOrg))
 	}
+
+	return nil
 }
 
-func NodeListPolicy(org string, credToUse string, node string) {
+func NodeListPolicy(org string, credToUse string, node string, exchangeHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	cliutils.SetWhetherUsingApiKey(credToUse)
 	var nodeOrg string
-	nodeOrg, node = cliutils.TrimOrg(org, node)
+	var err error
+	if nodeOrg, node, err = cliutils.TrimOrg(org, node); err != nil {
+		return err
+	}
 
 	// check node exists first
 	var nodes ExchangeNodes
-	httpCode := cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), "orgs/"+nodeOrg+"/nodes"+cliutils.AddSlash(node), cliutils.OrgAndCreds(org, credToUse), []int{200, 404}, &nodes)
-	if httpCode == 404 {
-		cliutils.Fatal(cliutils.NOT_FOUND, msgPrinter.Sprintf("node '%v/%v' not found.", nodeOrg, node))
+	if httpCode, err := exchangeHandler.Get("orgs/"+nodeOrg+"/nodes"+cliutils.AddSlash(node), cliutils.OrgAndCreds(org, credToUse), &nodes); err != nil {
+		return err
+	} else if httpCode == 404 {
+		return cliutils.CLIError{StatusCode: cliutils.NOT_FOUND, msgPrinter.Sprintf("node '%v/%v' not found.", nodeOrg, node))
 	}
 
 	// list policy
 	var policy exchange.ExchangeNodePolicy
-	cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), "orgs/"+nodeOrg+"/nodes"+cliutils.AddSlash(node)+"/policy", cliutils.OrgAndCreds(org, credToUse), []int{200, 404}, &policy)
+	exchangeHandler.Get("orgs/"+nodeOrg+"/nodes"+cliutils.AddSlash(node)+"/policy", cliutils.OrgAndCreds(org, credToUse), &policy)
 
 	// display
 	output, err := cliutils.DisplayAsJson(policy)
 	if err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal node policy output: %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal node policy output: %v", err))
 	}
 
 	fmt.Println(output)
+
+	return nil
 }
 
-func NodeAddPolicy(org string, credToUse string, node string, jsonFilePath string) {
+func NodeAddPolicy(org string, credToUse string, node string, jsonFilePath string, exchangeHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	cliutils.SetWhetherUsingApiKey(credToUse)
 	var nodeOrg string
-	nodeOrg, node = cliutils.TrimOrg(org, node)
+	var err error
+	if nodeOrg, node, err = cliutils.TrimOrg(org, node); err != nil {
+		return err
+	}
 
 	// Read in the policy metadata
-	newBytes := cliconfig.ReadJsonFileWithLocalConfig(jsonFilePath)
-	var policyFile exchangecommon.NodePolicy
-	err := json.Unmarshal(newBytes, &policyFile)
+	newBytes, err := cliconfig.ReadJsonFileWithLocalConfig(jsonFilePath)
 	if err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal json input file %s: %v", jsonFilePath, err))
+		return err
+	}
+	var policyFile exchangecommon.NodePolicy
+	err = json.Unmarshal(newBytes, &policyFile)
+	if err != nil {
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal json input file %s: %v", jsonFilePath, err))
 	}
 
 	//Check the policy file format
 	err = policyFile.ValidateAndNormalize()
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Incorrect policy format in file %s: %v", jsonFilePath, err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Incorrect policy format in file %s: %v", jsonFilePath, err))
 	}
 
 	// let the user aware of the new node policy format.
@@ -439,22 +500,25 @@ func NodeAddPolicy(org string, credToUse string, node string, jsonFilePath strin
 
 	// check node exists first
 	var nodes ExchangeNodes
-	httpCode := cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), "orgs/"+nodeOrg+"/nodes"+cliutils.AddSlash(node), cliutils.OrgAndCreds(org, credToUse), []int{200, 404}, &nodes)
-	if httpCode == 404 {
-		cliutils.Fatal(cliutils.NOT_FOUND, msgPrinter.Sprintf("node '%v/%v' not found.", nodeOrg, node))
+	if httpCode, err := exchangeHandler.Get("orgs/"+nodeOrg+"/nodes"+cliutils.AddSlash(node), cliutils.OrgAndCreds(org, credToUse), &nodes); err != nil {
+		return err
+	} else if httpCode == 404 {
+		return cliutils.CLIError{StatusCode: cliutils.NOT_FOUND, msgPrinter.Sprintf("node '%v/%v' not found.", nodeOrg, node))
 	}
 
 	// add/replce node policy
 	exchNodePol := exchange.ExchangeNodePolicy{NodePolicy: policyFile, NodePolicyVersion: exchangecommon.NODEPOLICY_VERSION_VERSION_2}
 	msgPrinter.Printf("Updating Node policy and re-evaluating all agreements based on this policy. Existing agreements might be cancelled and re-negotiated.")
 	msgPrinter.Println()
-	cliutils.ExchangePutPost("Exchange", http.MethodPut, cliutils.GetExchangeUrl(), "orgs/"+nodeOrg+"/nodes/"+node+"/policy"+"?"+cliutils.NOHEARTBEAT_PARAM, cliutils.OrgAndCreds(org, credToUse), []int{201}, exchNodePol, nil)
+	exchangeHandler.Put("orgs/"+nodeOrg+"/nodes/"+node+"/policy"+"?"+cliutils.NOHEARTBEAT_PARAM, cliutils.OrgAndCreds(org, credToUse), exchNodePol, nil)
 
 	msgPrinter.Printf("Node policy updated.")
 	msgPrinter.Println()
+
+	return nil
 }
 
-func NodeUpdatePolicy(org, credToUse, node string, jsonfile string) {
+func NodeUpdatePolicy(org, credToUse, node string, jsonfile string, exchangeHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -463,21 +527,28 @@ func NodeUpdatePolicy(org, credToUse, node string, jsonfile string) {
 
 	cliutils.SetWhetherUsingApiKey(credToUse)
 	var nodeOrg string
-	nodeOrg, node = cliutils.TrimOrg(org, node)
+	var err error
+	if nodeOrg, node, err = cliutils.TrimOrg(org, node); err != nil {
+		return err
+	}
 
-	attribute := cliconfig.ReadJsonFileWithLocalConfig(jsonfile)
+	attribute, err := cliconfig.ReadJsonFileWithLocalConfig(jsonfile)
+	if err != nil {
+		return err
+	}
 
 	//Check if the node policy exists in the exchange
 	var newPolicy exchange.ExchangeNodePolicy
-	httpCode := cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), "orgs/"+nodeOrg+"/nodes"+cliutils.AddSlash(node)+"/policy", cliutils.OrgAndCreds(org, credToUse), []int{200, 404}, &newPolicy)
-	if httpCode == 404 {
-		cliutils.Fatal(cliutils.NOT_FOUND, msgPrinter.Sprintf("Node policy not found for node %s/%s", nodeOrg, node))
+	if httpCode, err := exchangeHandler.Get("orgs/"+nodeOrg+"/nodes"+cliutils.AddSlash(node)+"/policy", cliutils.OrgAndCreds(org, credToUse), &newPolicy); err != nil {
+		return err
+	} else if httpCode == 404 {
+		return cliutils.CLIError{StatusCode: cliutils.NOT_FOUND, msgPrinter.Sprintf("Node policy not found for node %s/%s", nodeOrg, node))
 	}
 
 	findAttrType := make(map[string]interface{})
-	err := json.Unmarshal([]byte(attribute), &findAttrType)
+	err = json.Unmarshal([]byte(attribute), &findAttrType)
 	if err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal attribute input %s: %v", attribute, err))
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal attribute input %s: %v", attribute, err))
 	}
 
 	attribName := ""
@@ -486,12 +557,12 @@ func NodeUpdatePolicy(org, credToUse, node string, jsonfile string) {
 		propertiesPatch := make(map[string]externalpolicy.PropertyList)
 		err := json.Unmarshal([]byte(attribute), &propertiesPatch)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal attribute input %s for %s: %v", attribute, attribName, err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal attribute input %s for %s: %v", attribute, attribName, err))
 		}
 		newProp := propertiesPatch["properties"]
 		err = newProp.Validate()
 		if err != nil {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid property list %s: %v", newProp, err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid property list %s: %v", newProp, err))
 		}
 		newPolicy.Properties = newProp
 	} else if _, ok = findAttrType["constraints"]; ok {
@@ -499,12 +570,12 @@ func NodeUpdatePolicy(org, credToUse, node string, jsonfile string) {
 		constraintPatch := make(map[string]externalpolicy.ConstraintExpression)
 		err := json.Unmarshal([]byte(attribute), &constraintPatch)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal attribute input %s for %ss: %v", attribute, attribName, err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal attribute input %s for %ss: %v", attribute, attribName, err))
 		}
 		newConstr := constraintPatch["constraints"]
 		_, err = newConstr.Validate()
 		if err != nil {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid constraint expression %s: %v", newConstr, err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid constraint expression %s: %v", newConstr, err))
 		}
 		newPolicy.Constraints = newConstr
 	} else if _, ok = findAttrType["deployment"]; ok {
@@ -512,12 +583,12 @@ func NodeUpdatePolicy(org, credToUse, node string, jsonfile string) {
 		externpolPatch := make(map[string]externalpolicy.ExternalPolicy)
 		err := json.Unmarshal([]byte(attribute), &externpolPatch)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal attribute input %s for %s: %v", attribute, attribName, err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal attribute input %s for %s: %v", attribute, attribName, err))
 		}
 		externPol := externpolPatch["deployment"]
 		err = (&externPol).ValidateAndNormalize()
 		if err != nil {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid deployment attribute %s: %v", externPol, err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid deployment attribute %s: %v", externPol, err))
 		}
 		newPolicy.Deployment = externPol
 	} else if _, ok = findAttrType["management"]; ok {
@@ -525,51 +596,58 @@ func NodeUpdatePolicy(org, credToUse, node string, jsonfile string) {
 		externpolPatch := make(map[string]externalpolicy.ExternalPolicy)
 		err := json.Unmarshal([]byte(attribute), &externpolPatch)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal attribute input %s for %s: %v", attribute, attribName, err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal attribute input %s for %s: %v", attribute, attribName, err))
 		}
 		externPol := externpolPatch["management"]
 		err = (&externPol).ValidateAndNormalize()
 		if err != nil {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid management attribute %s: %v", externPol, err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Invalid management attribute %s: %v", externPol, err))
 		}
 		newPolicy.Management = externPol
 	} else {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Failed to find valid attribute to update in input %s. Valid attribute names are properties, constraints, deployment and management.", attribute))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Failed to find valid attribute to update in input %s. Valid attribute names are properties, constraints, deployment and management.", attribute))
 	}
 
 	msgPrinter.Printf("Updating Node policy %v attribute for node %v in the horizon exchange and re-evaluating all agreements based on this policy. Existing agreements might be cancelled and re-negotiated.", attribName, node)
 	msgPrinter.Println()
 	exchNodePol := exchange.ExchangeNodePolicy{NodePolicy: newPolicy.NodePolicy, NodePolicyVersion: exchangecommon.NODEPOLICY_VERSION_VERSION_2}
-	cliutils.ExchangePutPost("Exchange", http.MethodPut, cliutils.GetExchangeUrl(), "orgs/"+nodeOrg+"/nodes/"+node+"/policy"+"?"+cliutils.NOHEARTBEAT_PARAM, cliutils.OrgAndCreds(org, credToUse), []int{200, 201}, exchNodePol, nil)
+	exchangeHandler.Put("orgs/"+nodeOrg+"/nodes/"+node+"/policy"+"?"+cliutils.NOHEARTBEAT_PARAM, cliutils.OrgAndCreds(org, credToUse), exchNodePol, nil)
 	msgPrinter.Printf("Node policy %v attribute updated for node %v in the horizon exchange.", attribName, node)
 	msgPrinter.Println()
+
+	return nil
 }
 
-func NodeRemovePolicy(org, credToUse, node string, force bool) {
+func NodeRemovePolicy(org, credToUse, node string, force bool, exchangeHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	cliutils.SetWhetherUsingApiKey(credToUse)
 	var nodeOrg string
-	nodeOrg, node = cliutils.TrimOrg(org, node)
+	var err error
+	if nodeOrg, node, err = cliutils.TrimOrg(org, node); err != nil {
+		return err
+	}
 	if !force {
 		cliutils.ConfirmRemove(msgPrinter.Sprintf("Are you sure you want to remove node policy for %v/%v from the Horizon Exchange?", nodeOrg, node))
 	}
 
 	// check node exists first
 	var nodes ExchangeNodes
-	httpCode := cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), "orgs/"+nodeOrg+"/nodes"+cliutils.AddSlash(node), cliutils.OrgAndCreds(org, credToUse), []int{200, 404}, &nodes)
-	if httpCode == 404 {
-		cliutils.Fatal(cliutils.NOT_FOUND, msgPrinter.Sprintf("node '%v/%v' not found.", nodeOrg, node))
+	if httpCode, err := exchangeHandler.Get("orgs/"+nodeOrg+"/nodes"+cliutils.AddSlash(node), cliutils.OrgAndCreds(org, credToUse), &nodes); err != nil {
+		return err
+	} else if httpCode == 404 {
+		return cliutils.CLIError{StatusCode: cliutils.NOT_FOUND, msgPrinter.Sprintf("node '%v/%v' not found.", nodeOrg, node))
 	}
 
 	// remove policy
 	msgPrinter.Printf("Removing Node policy and re-evaluating all agreements. Existing agreements might be cancelled and re-negotiated.")
 	msgPrinter.Println()
-	cliutils.ExchangeDelete("Exchange", cliutils.GetExchangeUrl(), "orgs/"+nodeOrg+"/nodes/"+node+"/policy", cliutils.OrgAndCreds(org, credToUse), []int{204, 404})
+	exchangeHandler.Delete("orgs/"+nodeOrg+"/nodes/"+node+"/policy", cliutils.OrgAndCreds(org, credToUse))
 	msgPrinter.Printf("Node policy removed.")
 	msgPrinter.Println()
 
+	return nil
 }
 
 // Format for outputting eventlog objects
@@ -584,22 +662,28 @@ type EventLog struct {
 }
 
 // NodeListErrors Displays the node errors currently surfaced to the exchange
-func NodeListErrors(org string, credToUse string, node string, long bool) {
+func NodeListErrors(org string, credToUse string, node string, long bool, exchangeHandler cliutils.ServiceHandler) error {
 	msgPrinter := i18n.GetMessagePrinter()
 
 	cliutils.SetWhetherUsingApiKey(credToUse)
 	var nodeOrg string
-	nodeOrg, node = cliutils.TrimOrg(org, node)
+	var err error
+	if nodeOrg, node, err = cliutils.TrimOrg(org, node); err != nil {
+		return err
+	}
 
 	// Check that the node specified exists in the exchange
 	var nodes ExchangeNodes
-	httpCode := cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), "orgs/"+nodeOrg+"/nodes"+cliutils.AddSlash(node), cliutils.OrgAndCreds(org, credToUse), []int{200, 404}, &nodes)
-	if httpCode == 404 {
-		cliutils.Fatal(cliutils.NOT_FOUND, msgPrinter.Sprintf("node '%v/%v' not found.", nodeOrg, node))
+	if httpCode, err := exchangeHandler.Get("orgs/"+nodeOrg+"/nodes"+cliutils.AddSlash(node), cliutils.OrgAndCreds(org, credToUse), &nodes); err != nil {
+		return err
+	} else if httpCode == 404 {
+		return cliutils.CLIError{StatusCode: cliutils.NOT_FOUND, msgPrinter.Sprintf("node '%v/%v' not found.", nodeOrg, node))
 	}
 
 	var resp exchange.ExchangeSurfaceError
-	httpCode = cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), "orgs/"+nodeOrg+"/nodes/"+node+"/errors", cliutils.OrgAndCreds(org, credToUse), []int{200, 404}, &resp)
+	if _, err = exchangeHandler.Get("orgs/"+nodeOrg+"/nodes/"+node+"/errors", cliutils.OrgAndCreds(org, credToUse), &resp); err != nil {
+		return err
+	}
 
 	errorList := []persistence.SurfaceError{}
 	if resp.ErrorList != nil {
@@ -609,7 +693,7 @@ func NodeListErrors(org string, credToUse string, node string, long bool) {
 	if !long {
 		jsonBytes, err := json.MarshalIndent(errorList, "", cliutils.JSON_INDENT)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn exchange node listerrors' output: %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn exchange node listerrors' output: %v", err))
 		}
 		fmt.Printf("%s\n", jsonBytes)
 	} else {
@@ -618,7 +702,7 @@ func NodeListErrors(org string, credToUse string, node string, long bool) {
 			var fullVSlice []persistence.EventLogRaw
 			cliutils.HorizonGet(fmt.Sprintf("eventlog/all?record_id=%s", v.Record_id), []int{200}, &fullVSlice, false)
 			if len(fullVSlice) == 0 {
-				cliutils.Fatal(cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("Error: event record could not be found"))
+				return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("Error: event record could not be found"))
 			}
 			fullV := fullVSlice[0]
 			long_output[i].Id = fullV.Id
@@ -631,45 +715,58 @@ func NodeListErrors(org string, credToUse string, node string, long bool) {
 		}
 		jsonBytes, err := json.MarshalIndent(long_output, "", cliutils.JSON_INDENT)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal 'hzn exchange node listerrors' output: %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal 'hzn exchange node listerrors' output: %v", err))
 		}
 		fmt.Printf("%s\n", jsonBytes)
 	}
+
+	return nil
 }
 
 // NodeListStatus list the node run time status, for example service container status.
-func NodeListStatus(org string, credToUse string, node string) {
+func NodeListStatus(org string, credToUse string, node string, exchangeHandler cliutils.ServiceHandler) error {
 	msgPrinter := i18n.GetMessagePrinter()
 
 	cliutils.SetWhetherUsingApiKey(credToUse)
 	var nodeOrg string
-	nodeOrg, node = cliutils.TrimOrg(org, node)
-
-	var nodeStatus ExchangeNodeStatus
-	httpCode := cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), "orgs/"+nodeOrg+"/nodes"+cliutils.AddSlash(node)+"/status", cliutils.OrgAndCreds(org, credToUse), []int{200, 404}, &nodeStatus)
-	if httpCode == 404 {
-		cliutils.Fatal(cliutils.NOT_FOUND, msgPrinter.Sprintf("node status not found for node '%v/%v'.", nodeOrg, node))
+	var err error
+	if nodeOrg, node, err = cliutils.TrimOrg(org, node); err != nil {
+		return err
 	}
 
-	output := cliutils.MarshalIndent(nodeStatus, "exchange node liststatus")
+	var nodeStatus ExchangeNodeStatus
+	if httpCode, err := exchangeHandler.Get("orgs/"+nodeOrg+"/nodes"+cliutils.AddSlash(node)+"/status", cliutils.OrgAndCreds(org, credToUse), &nodeStatus); err != nil {
+		return err
+	} else if httpCode == 404 {
+		return cliutils.CLIError{StatusCode: cliutils.NOT_FOUND, msgPrinter.Sprintf("node status not found for node '%v/%v'.", nodeOrg, node))
+	}
+
+	output, err := cliutils.MarshalIndent(nodeStatus, "exchange node liststatus")
+	if err != nil {
+		return err
+	}
 	fmt.Println(output)
 
+	return nil
 }
 
 // Verify the node user input for the pattern case. Make sure that the given
 // user input are compatible with the pattern.
-func verifyNodeUserInput(org string, credToUse string, node exchange.Device, nId string, ui []policy.UserInput) {
+func verifyNodeUserInput(org string, credToUse string, node exchange.Device, nId string, ui []policy.UserInput) error {
 	msgPrinter := i18n.GetMessagePrinter()
 
 	if node.Pattern == "" {
-		return
+		return nil
 	}
 
 	msgPrinter.Printf("Verifying userInputs with the node pattern %v.", node.Pattern)
 	msgPrinter.Println()
 
 	// get exchange context
-	ec := cliutils.GetUserExchangeContext(org, credToUse)
+	ec, err := cliutils.GetUserExchangeContext(org, credToUse)
+	if err != nil {
+		return err
+	}
 
 	// compcheck.UserInputCompatible function calls the exchange package that calls glog.
 	// set the glog stderrthreshold to 3 (fatal) in order for glog error messages not showing up in the output
@@ -686,7 +783,7 @@ func verifyNodeUserInput(org string, credToUse string, node exchange.Device, nId
 	// the policy validation are done wthin the calling function.
 	compOutput, err := compcheck.UserInputCompatible(ec, &uiCheckInput, true, msgPrinter)
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, err.Error())
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, err.Error())
 	} else if !compOutput.Compatible {
 		msgPrinter.Printf("Error varifying the given user input with the node pattern %v:", node.Pattern)
 		msgPrinter.Println()
@@ -697,13 +794,15 @@ func verifyNodeUserInput(org string, credToUse string, node exchange.Device, nId
 				}
 			}
 		}
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to update the node because of the above error."))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to update the node because of the above error."))
 	}
+
+	return nil
 }
 
 // Verify the node user input for the policy case. Make sure that the given
 // user input are compatible with the service in exchange
-func verifyNodeUserInputsForPolicy(org string, credToUse string, node exchange.Device, ui []policy.UserInput) {
+func verifyNodeUserInputsForPolicy(org string, credToUse string, node exchange.Device, ui []policy.UserInput) error {
 	msgPrinter := i18n.GetMessagePrinter()
 	msgPrinter.Printf("Verifying userInputs for node using policy.")
 	msgPrinter.Println()
@@ -729,7 +828,7 @@ func verifyNodeUserInputsForPolicy(org string, credToUse string, node exchange.D
 			var vExp *semanticversion.Version_Expression
 			var err error
 			if vExp, err = semanticversion.Version_Expression_Factory(serviceVersionRange); err != nil {
-				cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Unable to validate exchange node userInput, error: %v", "", err))
+				return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Unable to validate exchange node userInput, error: %v", "", err))
 			}
 			versionRange := vExp.Get_expression()
 
@@ -738,7 +837,10 @@ func verifyNodeUserInputsForPolicy(org string, credToUse string, node exchange.D
 			}
 
 			// get exchange context
-			ec := cliutils.GetUserExchangeContext(org, credToUse)
+			ec, err := cliutils.GetUserExchangeContext(org, credToUse)
+			if err != nil {
+				return err
+			}
 
 			serviceDefResolverHandler := exchange.GetHTTPServiceDefResolverHandler(ec)
 			var bpUserInput []policy.UserInput
@@ -746,11 +848,11 @@ func verifyNodeUserInputsForPolicy(org string, credToUse string, node exchange.D
 			svcSpec := compcheck.NewServiceSpec(serviceUrl, serviceOrg, versionRange, serviceArch)
 			if validated, message, sTop, _, sDeps, err := compcheck.VerifyUserInputForService(svcSpec, serviceDefResolverHandler, bpUserInput, ui, node.GetNodeType(), msgPrinter); !validated {
 				if err != nil && message != "" {
-					cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Unable to validate exchange node userInput, message: %v, error: %v", message, err))
+					return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Unable to validate exchange node userInput, message: %v, error: %v", message, err))
 				} else if err != nil {
-					cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Unable to validate exchange node userInput, error: %v", err))
+					return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Unable to validate exchange node userInput, error: %v", err))
 				} else {
-					cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Unable to validate exchange node userInput, message: %v", message))
+					return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Unable to validate exchange node userInput, message: %v", message))
 				}
 			} else {
 				top_services = append(top_services, sTop)
@@ -760,7 +862,7 @@ func verifyNodeUserInputsForPolicy(org string, credToUse string, node exchange.D
 
 				// check service type and node type compatibility
 				if compatible_t, reason_t := compcheck.CheckTypeCompatibility(node.NodeType, sTop, msgPrinter); compatible_t != true {
-					cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Unable to validate exchange node userInput: %v", reason_t))
+					return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Unable to validate exchange node userInput: %v", reason_t))
 				}
 			}
 
@@ -771,4 +873,6 @@ func verifyNodeUserInputsForPolicy(org string, credToUse string, node exchange.D
 			cliutils.Warning(msgPrinter.Sprintf("validate exchange node/userinput %v ", err))
 		}
 	}
+
+	return nil
 }

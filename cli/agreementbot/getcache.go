@@ -10,11 +10,11 @@ import (
 )
 
 // Display served pattern orgs and deployment policy orgs cached by aggrement bot.
-func GetServedOrgs() {
+func GetServedOrgs() error {
 	msgPrinter := i18n.GetMessagePrinter()
 	// set env to call agbot url
 	if err := os.Setenv("HORIZON_URL", cliutils.GetAgbotUrlBase()); err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("unable to set env var 'HORIZON_URL', error %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, Message: msgPrinter.Sprintf("unable to set env var 'HORIZON_URL', error %v", err)}
 	}
 
 	// Get the agbot servedorgs info
@@ -24,23 +24,24 @@ func GetServedOrgs() {
 	// Output the combined info
 	jsonBytes, err := json.MarshalIndent(servedOrgsInfo, "", cliutils.JSON_INDENT)
 	if err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'hzn node list' output: %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal 'hzn node list' output: %v", err)}
 	}
 	fmt.Printf("%s\n", jsonBytes)
 
+	return nil
 }
 
 // Display patterns cached by agreement bot. If no org or org/name is specified, display all. Show detailed info if long
-func GetPatterns(org string, name string, long bool) {
+func GetPatterns(org string, name string, long bool) error {
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// set env to call agbot url
 	if err := os.Setenv("HORIZON_URL", cliutils.GetAgbotUrlBase()); err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("unable to set env var 'HORIZON_URL', error %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, Message: msgPrinter.Sprintf("unable to set env var 'HORIZON_URL', error %v", err)}
 	}
 
 	if name != "" && org == "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("org must be specified with -o when pattern name is specified."))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, Message: msgPrinter.Sprintf("org must be specified with -o when pattern name is specified.")}
 	}
 
 	// base url upon which to add arguments and flag
@@ -67,7 +68,7 @@ func GetPatterns(org string, name string, long bool) {
 			// Output the combined info
 			jsonBytes, err := json.MarshalIndent(patInfo, "", cliutils.JSON_INDENT)
 			if err != nil {
-				cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal output: %v", err))
+				return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal output: %v", err)}
 			}
 			fmt.Printf("%s\n", jsonBytes)
 
@@ -82,7 +83,7 @@ func GetPatterns(org string, name string, long bool) {
 				// Output the combined info
 				jsonBytes, err := json.MarshalIndent(patInfo, "", cliutils.JSON_INDENT)
 				if err != nil {
-					cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal output: %v", err))
+					return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal output: %v", err)}
 				}
 				fmt.Printf("%s\n", jsonBytes)
 			}
@@ -99,7 +100,7 @@ func GetPatterns(org string, name string, long bool) {
 				// Output the combined info
 				jsonBytes, err := json.MarshalIndent(patInfo, "", cliutils.JSON_INDENT)
 				if err != nil {
-					cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal output: %v", err))
+					return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal output: %v", err)}
 				}
 				fmt.Printf("%s\n", jsonBytes)
 			}
@@ -113,7 +114,7 @@ func GetPatterns(org string, name string, long bool) {
 				// Output the combined info
 				jsonBytes, err := json.MarshalIndent(patInfo, "", cliutils.JSON_INDENT)
 				if err != nil {
-					cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal output: %v", err))
+					return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal output: %v", err)}
 				}
 				fmt.Printf("%s\n", jsonBytes)
 			}
@@ -126,23 +127,24 @@ func GetPatterns(org string, name string, long bool) {
 		// Output the combined info
 		jsonBytes, err := json.MarshalIndent(patInfo, "", cliutils.JSON_INDENT)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal output: %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal output: %v", err)}
 		}
 		fmt.Printf("%s\n", jsonBytes)
 	}
 
+	return nil
 }
 
 // Display deployment policies cached by agreement bot. If no org or org/name is specified, display all. Show detailed info if long
-func GetPolicies(org string, name string, long bool) {
+func GetPolicies(org string, name string, long bool) error {
 	msgPrinter := i18n.GetMessagePrinter()
 	// set env to call agbot url
 	if err := os.Setenv("HORIZON_URL", cliutils.GetAgbotUrlBase()); err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("unable to set env var 'HORIZON_URL', error %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, Message: msgPrinter.Sprintf("unable to set env var 'HORIZON_URL', error %v", err)}
 	}
 
 	if name != "" && org == "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("org must be specified with -o when deployment policy name is specified."))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, Message: msgPrinter.Sprintf("org must be specified with -o when deployment policy name is specified.")}
 	}
 
 	// base Url from which to add other flags and arguments
@@ -170,7 +172,7 @@ func GetPolicies(org string, name string, long bool) {
 			// Output the combined info
 			jsonBytes, err := json.MarshalIndent(polInfo, "", cliutils.JSON_INDENT)
 			if err != nil {
-				cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal output: %v", err))
+				return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal output: %v", err)}
 			}
 			fmt.Printf("%s\n", jsonBytes)
 
@@ -185,7 +187,7 @@ func GetPolicies(org string, name string, long bool) {
 				// Output the combined info
 				jsonBytes, err := json.MarshalIndent(polInfo, "", cliutils.JSON_INDENT)
 				if err != nil {
-					cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal output: %v", err))
+					return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal output: %v", err)}
 				}
 				fmt.Printf("%s\n", jsonBytes)
 			}
@@ -202,7 +204,7 @@ func GetPolicies(org string, name string, long bool) {
 				// Output the combined info
 				jsonBytes, err := json.MarshalIndent(polInfo, "", cliutils.JSON_INDENT)
 				if err != nil {
-					cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal output: %v", err))
+					return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal output: %v", err)}
 				}
 				fmt.Printf("%s\n", jsonBytes)
 			}
@@ -215,7 +217,7 @@ func GetPolicies(org string, name string, long bool) {
 				// Output the combined info
 				jsonBytes, err := json.MarshalIndent(polInfo, "", cliutils.JSON_INDENT)
 				if err != nil {
-					cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal output: %v", err))
+					return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal output: %v", err)}
 				}
 				fmt.Printf("%s\n", jsonBytes)
 			}
@@ -228,8 +230,10 @@ func GetPolicies(org string, name string, long bool) {
 		// Output the combined info
 		jsonBytes, err := json.MarshalIndent(polInfo, "", cliutils.JSON_INDENT)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal output: %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, Message: msgPrinter.Sprintf("failed to marshal output: %v", err)}
 		}
 		fmt.Printf("%s\n", jsonBytes)
 	}
+
+	return nil
 }

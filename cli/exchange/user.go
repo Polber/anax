@@ -6,7 +6,6 @@ import (
 	"github.com/open-horizon/anax/cli/cliutils"
 	"github.com/open-horizon/anax/i18n"
 	"github.com/open-horizon/anax/semanticversion"
-	"net/http"
 	"strings"
 )
 
@@ -26,26 +25,29 @@ type ExchangeUser struct {
 	UpdatedBy   string `json:"updatedBy"`
 }
 
-func UserList(org, userPwCreds, theUser string, allUsers, namesOnly bool) {
+func UserList(org, userPwCreds, theUser string, allUsers, namesOnly bool, exchangeHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	cliutils.SetWhetherUsingApiKey(userPwCreds)
 
 	// Decide which users should be shown
-	exchUrlBase := cliutils.GetExchangeUrl()
+	var err error
 	if allUsers {
 		theUser = ""
 	} else if theUser == "" {
 		theUser, _ = cliutils.SplitIdToken(userPwCreds)
-		_, theUser = cliutils.TrimOrg("", theUser)
+		if _, theUser, err = cliutils.TrimOrg("", theUser); err != nil {
+			return err
+		}
 	} // else we list the user specified in theUser
 
 	// Get users
 	var users ExchangeUsers
-	httpCode := cliutils.ExchangeGet("Exchange", exchUrlBase, "orgs/"+org+"/users"+cliutils.AddSlash(theUser), cliutils.OrgAndCreds(org, userPwCreds), []int{200, 404}, &users)
-	if httpCode == 404 {
-		cliutils.Fatal(cliutils.NOT_FOUND, msgPrinter.Sprintf("user '%s' not found in org %s", strings.TrimPrefix(theUser, "/"), org))
+	if httpCode, err := exchangeHandler.Get("orgs/"+org+"/users"+cliutils.AddSlash(theUser), cliutils.OrgAndCreds(org, userPwCreds), &users); err != nil {
+		return err
+	} else if httpCode == 404 {
+		return cliutils.CLIError{StatusCode: cliutils.NOT_FOUND, msgPrinter.Sprintf("user '%s' not found in org %s", strings.TrimPrefix(theUser, "/"), org))
 	}
 
 	// Decide how much of each user should be shown
@@ -56,81 +58,99 @@ func UserList(org, userPwCreds, theUser string, allUsers, namesOnly bool) {
 		}
 		jsonBytes, err := json.MarshalIndent(usernames, "", cliutils.JSON_INDENT)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'exchange user list' output: %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to marshal 'exchange user list' output: %v", err))
 		}
 		fmt.Printf("%s\n", jsonBytes)
 	} else { // show full resources
-		output := cliutils.MarshalIndent(users.Users, "exchange users list")
+		output, err := cliutils.MarshalIndent(users.Users, "exchange users list")
+		if err != nil {
+			return err
+		}
 		fmt.Println(output)
 	}
+
+	return nil
 }
 
-func UserCreate(org, userPwCreds, user, pw, email string, isAdmin bool, isHubAdmin bool) {
+func UserCreate(org, userPwCreds, user, pw, email string, isAdmin bool, isHubAdmin bool, exchangeHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	var emailIsOptional bool
 	var err error
-	if emailIsOptional, err = checkExchangeVersionForOptionalUserEmail(org, userPwCreds); err != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("failed to check exchange version, error: %v", err))
+	if emailIsOptional, err = checkExchangeVersionForOptionalUserEmail(org, userPwCreds, exchangeHandler); err != nil {
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("failed to check exchange version, error: %v", err))
 	}
 
 	if email == "" && strings.Contains(user, "@") {
 		email = user
 	} else if email == "" && !emailIsOptional {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("an email must be specified because the Exchange API version is less than %v.", USER_EMAIL_OPTIONAL_EXCHANGE_VERSION))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("an email must be specified because the Exchange API version is less than %v.", USER_EMAIL_OPTIONAL_EXCHANGE_VERSION))
 	}
 
 	if isHubAdmin && org != "root" {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Only users in the root org can be hubadmins."))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Only users in the root org can be hubadmins."))
 	}
 
 	if !isHubAdmin && org == "root" {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Users in the root org must be hubadmins. Omit the -H option."))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Users in the root org must be hubadmins. Omit the -H option."))
 	}
 
 	cliutils.SetWhetherUsingApiKey(userPwCreds)
 
 	postUserReq := cliutils.UserExchangeReq{Password: pw, Admin: isAdmin, HubAdmin: isHubAdmin, Email: email}
-	cliutils.ExchangePutPost("Exchange", http.MethodPost, cliutils.GetExchangeUrl(), "orgs/"+org+"/users/"+user, cliutils.OrgAndCreds(org, userPwCreds), []int{201}, postUserReq, nil)
+	if _, err = exchangeHandler.Post("orgs/"+org+"/users/"+user, cliutils.OrgAndCreds(org, userPwCreds), postUserReq, nil); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type UserExchangePatchAdmin struct {
 	Admin bool `json:"admin"`
 }
 
-func UserSetAdmin(org, userPwCreds, user string, isAdmin bool) {
+func UserSetAdmin(org, userPwCreds, user string, isAdmin bool, exchangeHandler cliutils.ServiceHandler) error {
 	msgPrinter := i18n.GetMessagePrinter()
 
 	if isAdmin && org == "root" {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("A user in the root org cannot be an org admin."))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("A user in the root org cannot be an org admin."))
 	}
 
 	cliutils.SetWhetherUsingApiKey(userPwCreds)
 	patchUserReq := UserExchangePatchAdmin{Admin: isAdmin}
-	cliutils.ExchangePutPost("Exchange", http.MethodPatch, cliutils.GetExchangeUrl(), "orgs/"+org+"/users/"+user, cliutils.OrgAndCreds(org, userPwCreds), []int{201}, patchUserReq, nil)
+	if _, err := exchangeHandler.Patch("orgs/"+org+"/users/"+user, cliutils.OrgAndCreds(org, userPwCreds), patchUserReq, nil); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func UserRemove(org, userPwCreds, user string, force bool) {
+func UserRemove(org, userPwCreds, user string, force bool, exchangeHandler cliutils.ServiceHandler) error {
 	cliutils.SetWhetherUsingApiKey(userPwCreds)
 	if !force {
 		cliutils.ConfirmRemove(i18n.GetMessagePrinter().Sprintf("Warning: this will also delete all Exchange resources owned by this user (nodes, services, patterns, etc). Are you sure you want to remove user %v/%v from the Horizon Exchange?", org, user))
 	}
 
-	httpCode := cliutils.ExchangeDelete("Exchange", cliutils.GetExchangeUrl(), "orgs/"+org+"/users/"+user, cliutils.OrgAndCreds(org, userPwCreds), []int{204, 404})
-	if httpCode == 404 {
-		cliutils.Fatal(cliutils.NOT_FOUND, i18n.GetMessagePrinter().Sprintf("user '%s' not found in org %s", user, org))
+	if httpCode, err := exchangeHandler.Delete("orgs/"+org+"/users/"+user, cliutils.OrgAndCreds(org, userPwCreds)); err != nil {
+		return err
+	} else if httpCode == 404 {
+		return cliutils.CLIError{StatusCode: cliutils.NOT_FOUND, i18n.GetMessagePrinter().Sprintf("user '%s' not found in org %s", user, org))
 	}
+
+	return nil
 }
 
 // check if current exchange version is greater than 2.61.0, which makes user email optional.
 // return (true, nil) if user email is optional
 // return (false, nil) if user email is required
-func checkExchangeVersionForOptionalUserEmail(org, userPwCreds string) (bool, error) {
+func checkExchangeVersionForOptionalUserEmail(org, userPwCreds string, exchangeHandler cliutils.ServiceHandler) (bool, error) {
 	cliutils.SetWhetherUsingApiKey(userPwCreds)
 
 	var output []byte
-	cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), "admin/version", cliutils.OrgAndCreds(org, userPwCreds), []int{200}, &output)
+	if _, err := exchangeHandler.Get("admin/version", cliutils.OrgAndCreds(org, userPwCreds), &output); err != nil {
+		return false, err
+	}
 
 	exchangeVersion := strings.TrimSpace(string(output))
 

@@ -118,13 +118,15 @@ func (p *KubeDeploymentConfigPlugin) Validate(dep interface{}, cdep interface{})
 	}
 }
 
-func (p *KubeDeploymentConfigPlugin) StartTest(homeDirectory string, userInputFile string, configFiles []string, configType string, noFSS bool, userCreds string, secretsFiles map[string]string) bool {
+func (p *KubeDeploymentConfigPlugin) StartTest(homeDirectory string, userInputFile string, configFiles []string, configType string, noFSS bool, userCreds string, secretsFiles map[string]string, exchangeHandler cliutils.ServiceHandler) (bool, error) {
 
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// Run verification before trying to start anything.
-	dev.ServiceValidate(homeDirectory, userInputFile, configFiles, configType, userCreds)
+	if _, err := dev.ServiceValidate(homeDirectory, userInputFile, configFiles, configType, userCreds, exchangeHandler); err != nil {
+		return false, err
+	}
 
 	// Perform the common execution setup.
 	dir, _, _ := dev.CommonExecutionSetup(homeDirectory, userInputFile, dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND)
@@ -132,7 +134,7 @@ func (p *KubeDeploymentConfigPlugin) StartTest(homeDirectory string, userInputFi
 	// Get the service definition, so that we can look at the user input variable definitions.
 	serviceDef, sderr := dev.GetServiceDefinition(dir, dev.SERVICE_DEFINITION_FILE)
 	if sderr != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, fmt.Sprintf("'%v %v' %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, sderr))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, fmt.Sprintf("'%v %v' %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, sderr))
 	}
 
 	// Now that we have the service def, we can check if we own the deployment config object.
@@ -141,13 +143,13 @@ func (p *KubeDeploymentConfigPlugin) StartTest(homeDirectory string, userInputFi
 	// Otherwise, if the cluster config is ours, then we own the service but since this plugin doesnt
 	// support start and stop, terminate with a fatal error.
 	if serviceDef.Deployment != nil {
-		return false
+		return false, nil
 	} else {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' not supported for services using a %v deployment configuration", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, KUBE_DEPLOYMENT_CONFIG_TYPE))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' not supported for services using a %v deployment configuration", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, KUBE_DEPLOYMENT_CONFIG_TYPE))
 	}
 
 	// For the compiler
-	return true
+	return true, nil
 }
 
 func (p *KubeDeploymentConfigPlugin) StopTest(homeDirectory string) bool {
@@ -161,7 +163,7 @@ func (p *KubeDeploymentConfigPlugin) StopTest(homeDirectory string) bool {
 	// Get the service definition, so that we can look at the user input variable definitions.
 	serviceDef, sderr := dev.GetServiceDefinition(dir, dev.SERVICE_DEFINITION_FILE)
 	if sderr != nil {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, fmt.Sprintf("'%v %v' %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, sderr))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, fmt.Sprintf("'%v %v' %v", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, sderr))
 	}
 
 	// Now that we have the service def, we can check if we own the deployment config object.
@@ -171,7 +173,7 @@ func (p *KubeDeploymentConfigPlugin) StopTest(homeDirectory string) bool {
 		return false
 	}
 
-	cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' not supported for services using a %v deployment configuration", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, KUBE_DEPLOYMENT_CONFIG_TYPE))
+	return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("'%v %v' not supported for services using a %v deployment configuration", dev.SERVICE_COMMAND, dev.SERVICE_START_COMMAND, KUBE_DEPLOYMENT_CONFIG_TYPE))
 	// For the compiler
 	return true
 }

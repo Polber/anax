@@ -63,7 +63,7 @@ func getSelectionString(selections []string) (string, error) {
 	return strings.Join(sels, "&"), nil
 }
 
-func List(all bool, detail bool, selections []string, tailing bool) {
+func List(all bool, detail bool, selections []string, tailing bool) error {
 
 	// format the eventlog api string
 	url_s := "eventlog"
@@ -73,7 +73,7 @@ func List(all bool, detail bool, selections []string, tailing bool) {
 
 	if len(selections) > 0 {
 		if s, err := getSelectionString(selections); err != nil {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, "%v", err)
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, "%v", err)
 		} else {
 			url_s = fmt.Sprintf("%v?%v", url_s, s)
 		}
@@ -100,7 +100,7 @@ func List(all bool, detail bool, selections []string, tailing bool) {
 
 			jsonBytes, err := cliutils.DisplayAsJson(long_output)
 			if err != nil {
-				cliutils.Fatal(cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal 'hzn eventlog list' output: %v", err))
+				return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal 'hzn eventlog list' output: %v", err))
 			}
 			if len(jsonBytes) > 3 {
 				fmt.Printf("%s", jsonBytes[2:len(jsonBytes)-2])
@@ -113,7 +113,7 @@ func List(all bool, detail bool, selections []string, tailing bool) {
 			}
 			jsonBytes, err := cliutils.DisplayAsJson(short_output)
 			if err != nil {
-				cliutils.Fatal(cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal 'hzn eventlog list' output: %v", err))
+				return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal 'hzn eventlog list' output: %v", err))
 			}
 
 			if len(jsonBytes) > 3 {
@@ -137,7 +137,7 @@ func List(all bool, detail bool, selections []string, tailing bool) {
 			if len(apiOutput) > 0 {
 				newselect = append(newselect, fmt.Sprintf("record_id>%v", apiOutput[len(apiOutput)-1].Id))
 				if s, err := getSelectionString(newselect); err != nil {
-					cliutils.Fatal(cliutils.CLI_INPUT_ERROR, "%v", err)
+					return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, "%v", err)
 				} else {
 					url_s = fmt.Sprintf("eventlog?%v", s)
 				}
@@ -148,9 +148,11 @@ func List(all bool, detail bool, selections []string, tailing bool) {
 			break
 		}
 	}
+
+	return nil
 }
 
-func ListSurfaced(long bool) {
+func ListSurfaced(long bool) error {
 	apiOutput := make([]persistence.SurfaceError, 0)
 	cliutils.HorizonGet("eventlog/surface", []int{200}, &apiOutput, false)
 
@@ -160,7 +162,7 @@ func ListSurfaced(long bool) {
 			var fullVSlice []persistence.EventLogRaw
 			cliutils.HorizonGet(fmt.Sprintf("eventlog/all?record_id=%s", v.Record_id), []int{200}, &fullVSlice, false)
 			if len(fullVSlice) == 0 {
-				cliutils.Fatal(cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("Error: event record could not be found"))
+				return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("Error: event record could not be found"))
 			}
 			fullV := fullVSlice[0]
 			long_output[i].Id = fullV.Id
@@ -173,7 +175,7 @@ func ListSurfaced(long bool) {
 		}
 		jsonBytes, err := cliutils.DisplayAsJson(long_output)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal 'hzn eventlog surface' output: %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal 'hzn eventlog surface' output: %v", err))
 		}
 		fmt.Printf("%s\n", jsonBytes)
 	} else {
@@ -182,8 +184,10 @@ func ListSurfaced(long bool) {
 		}
 		jsonBytes, err := cliutils.DisplayAsJson(apiOutput)
 		if err != nil {
-			cliutils.Fatal(cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal 'hzn eventlog surface' output: %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, i18n.GetMessagePrinter().Sprintf("failed to marshal 'hzn eventlog surface' output: %v", err))
 		}
 		fmt.Printf("%s\n", jsonBytes)
 	}
+
+	return nil
 }

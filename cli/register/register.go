@@ -31,44 +31,52 @@ import (
 
 // read the user input file that contains the global attributes and service userinput settings.
 // it supports both old and new format.
-func ReadUserInputFile(filePath string) *common.UserInputFile {
+func ReadUserInputFile(filePath string) (*common.UserInputFile, error) {
 
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// read the file
-	newBytes := cliconfig.ReadJsonFileWithLocalConfig(filePath)
+	newBytes, err := cliconfig.ReadJsonFileWithLocalConfig(filePath)
+	if err != nil {
+		return nil, err
+	}
 
 	// create UserInputFile object
 	if uif, err := common.NewUserInputFileFromJsonBytes(newBytes); err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Unable to create UserInputFile object from file %s. %v", filePath, err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Unable to create UserInputFile object from file %s. %v", filePath, err))
 	} else {
-		return uif
+		return uif, nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 // read and verify a node policy file
-func ReadAndVerifyPolicFile(jsonFilePath string, nodePol *exchangecommon.NodePolicy) {
+func ReadAndVerifyPolicFile(jsonFilePath string, nodePol *exchangecommon.NodePolicy) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
-	newBytes := cliconfig.ReadJsonFileWithLocalConfig(jsonFilePath)
-	err := json.Unmarshal(newBytes, nodePol)
+	newBytes, err := cliconfig.ReadJsonFileWithLocalConfig(jsonFilePath)
 	if err != nil {
-		cliutils.Fatal(cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal json input file %s: %v", jsonFilePath, err))
+		return err
+	}
+	err = json.Unmarshal(newBytes, nodePol)
+	if err != nil {
+		return cliutils.CLIError{StatusCode: cliutils.JSON_PARSING_ERROR, msgPrinter.Sprintf("failed to unmarshal json input file %s: %v", jsonFilePath, err))
 	}
 
 	//Check the policy file format
 	err = nodePol.ValidateAndNormalize()
 	if err != nil {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Incorrect node policy format in file %s: %v", jsonFilePath, err))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Incorrect node policy format in file %s: %v", jsonFilePath, err))
 	}
+
+	return nil
 }
 
 // DoIt registers this node to Horizon with a pattern
-func DoIt(org, pattern, nodeIdTok, userPw, inputFile string, nodeOrgFromFlag string, patternFromFlag string, nodeName string, nodepolicyFlag string, waitService string, waitOrg string, waitTimeout int) {
+func DoIt(org, pattern, nodeIdTok, userPw, inputFile string, nodeOrgFromFlag string, patternFromFlag string, nodeName string, nodepolicyFlag string, waitService string, waitOrg string, waitTimeout int, exchangeHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
@@ -77,10 +85,13 @@ func DoIt(org, pattern, nodeIdTok, userPw, inputFile string, nodeOrgFromFlag str
 
 	cliutils.SetWhetherUsingApiKey(nodeIdTok) // if we have to use userPw later in NodeCreate(), it will set this appropriately for userPw
 	var userInputFileObj *common.UserInputFile
+	var err error
 	if inputFile != "" {
 		msgPrinter.Printf("Reading input file %s...", inputFile)
 		msgPrinter.Println()
-		userInputFileObj = ReadUserInputFile(inputFile)
+		if userInputFileObj, err = ReadUserInputFile(inputFile); err != nil {
+			return err
+		}
 		cliutils.Verbose(msgPrinter.Sprintf("Retrieved user input object from file %v: %v", inputFile, userInputFileObj))
 	}
 
@@ -102,10 +113,17 @@ func DoIt(org, pattern, nodeIdTok, userPw, inputFile string, nodeOrgFromFlag str
 	anaxArch := (*statusInfo.Configuration).Arch
 
 	// Get the exchange url from the anax api and the cli. Display a warning if they do not match.
-	exchUrlBase := cliutils.GetExchangeUrl()
+	exchUrlBase, err := cliutils.GetExchangeUrl()
+	if err != nil {
+		return err
+	}
 	anaxExchUrlBase := strings.TrimSuffix(cliutils.GetExchangeUrlFromAnax(), "/")
 	if exchUrlBase != anaxExchUrlBase && exchUrlBase != "" && anaxExchUrlBase != "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("hzn cli is configured with exchange url %s from %s and the horizon agent is configured with exchange url %s from %s. hzn register will not work with mismatched exchange urls.", exchUrlBase, cliutils.GetExchangeUrlLocation(), anaxExchUrlBase, cliutils.GetExchangeUrlLocationFromAnax()))
+		urlLoc, err := cliutils.GetExchangeUrlLocation()
+		if err != nil {
+			return err
+		}
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("hzn cli is configured with exchange url %s from %s and the horizon agent is configured with exchange url %s from %s. hzn register will not work with mismatched exchange urls.", exchUrlBase, urlLoc, anaxExchUrlBase, cliutils.GetExchangeUrlLocationFromAnax()))
 	} else {
 		msgPrinter.Printf("Horizon Exchange base URL: %s", exchUrlBase)
 		msgPrinter.Println()
@@ -129,7 +147,7 @@ func DoIt(org, pattern, nodeIdTok, userPw, inputFile string, nodeOrgFromFlag str
 
 	// exit if the node is already registered
 	if horDevice.Config != nil && horDevice.Config.State != nil && (*horDevice.Config.State != persistence.CONFIGSTATE_UNCONFIGURED) {
-		cliutils.Fatal(cliutils.HTTP_ERROR, msgPrinter.Sprintf("this Horizon node is already registered or in the process of being registered. If you want to register it differently, run 'hzn unregister' first."))
+		return cliutils.CLIError{StatusCode: cliutils.HTTP_ERROR, msgPrinter.Sprintf("this Horizon node is already registered or in the process of being registered. If you want to register it differently, run 'hzn unregister' first."))
 	}
 
 	// Default node id and token if necessary
@@ -137,7 +155,7 @@ func DoIt(org, pattern, nodeIdTok, userPw, inputFile string, nodeOrgFromFlag str
 	if nodeId == "" {
 		// Get the id from anax
 		if horDevice.Id == nil {
-			cliutils.Fatal(cliutils.ANAX_NOT_CONFIGURED_YET, msgPrinter.Sprintf("Failed to get proper response from the Horizon agent"))
+			return cliutils.CLIError{StatusCode: cliutils.ANAX_NOT_CONFIGURED_YET, msgPrinter.Sprintf("Failed to get proper response from the Horizon agent"))
 		}
 		nodeId = *horDevice.Id
 
@@ -157,7 +175,7 @@ func DoIt(org, pattern, nodeIdTok, userPw, inputFile string, nodeOrgFromFlag str
 				// Generate a random string of 40 characters, consisting of numbers and letters.
 				var err error
 				if nodeId, err = cutil.GenerateRandomNodeId(); err != nil {
-					cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to generate random node id, error: %v", err))
+					return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Unable to generate random node id, error: %v", err))
 				} else {
 					msgPrinter.Printf("Generated random node ID: %v.", nodeId)
 					msgPrinter.Println()
@@ -170,14 +188,16 @@ func DoIt(org, pattern, nodeIdTok, userPw, inputFile string, nodeOrgFromFlag str
 		}
 	} else {
 		// trim the org off the node id. the HZN_EXCHANGE_NODE_AUTH may contain the org id.
-		_, nodeId = cliutils.TrimOrg(org, nodeId)
+		if _, nodeId, err = cliutils.TrimOrg(org, nodeId); err != nil {
+			return err
+		}
 	}
 	if nodeToken == "" {
 		// Create a random token
 		var err error
 		nodeToken, err = cutil.SecureRandomString()
 		if err != nil {
-			cliutils.Fatal(cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("could not create a random token"))
+			return cliutils.CLIError{StatusCode: cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("could not create a random token"))
 		}
 		msgPrinter.Printf("Generated random node token")
 		msgPrinter.Println()
@@ -198,34 +218,42 @@ func DoIt(org, pattern, nodeIdTok, userPw, inputFile string, nodeOrgFromFlag str
 	// See if the node exists in the exchange, and create if it doesn't
 	var devicesResp exchange.GetDevicesResponse
 	exchangePattern := ""
-	httpCode := cliutils.ExchangeGet("Exchange", exchUrlBase, "orgs/"+org+"/nodes/"+nodeId, cliutils.OrgAndCreds(org, nodeIdTok), nil, &devicesResp)
-
 	var existingNodeName string
-	if httpCode != 200 {
+	if httpCode, err := exchangeHandler.Get("orgs/"+org+"/nodes/"+nodeId, cliutils.OrgAndCreds(org, nodeIdTok), &devicesResp); err != nil {
+		return err
+	} else if httpCode != 200 {
 		if userPw == "" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("node '%s/%s' does not exist in the Exchange with the specified token, and the -u flag was not specified to provide exchange user credentials to create/update it.", org, nodeId))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("node '%s/%s' does not exist in the Exchange with the specified token, and the -u flag was not specified to provide exchange user credentials to create/update it.", org, nodeId))
 		}
 
 		cliutils.SetWhetherUsingApiKey(userPw)
-		userOrg, userAuth := cliutils.TrimOrg(org, userPw)
-		httpCode1 := cliutils.ExchangeGet("Exchange", exchUrlBase, "orgs/"+org+"/nodes/"+nodeId, cliutils.OrgAndCreds(userOrg, userAuth), nil, &devicesResp)
-		if httpCode1 != 200 {
+		userOrg, userAuth, err := cliutils.TrimOrg(org, userPw)
+		if err != nil {
+			return err
+		}
+		if httpCode1, err := exchangeHandler.Get("orgs/"+org+"/nodes/"+nodeId, cliutils.OrgAndCreds(userOrg, userAuth), &devicesResp); err != nil {
+			return err
+		} else if httpCode1 != 200 {
 			// node does not exist, create it
 			msgPrinter.Printf("Node %s/%s does not exist in the Exchange with the specified token, creating/updating it...", org, nodeId)
 			msgPrinter.Println()
-			cliexchange.NodeCreate(org, "", nodeId, nodeToken, userPw, anaxArch, nodeName, nodeType, false)
+			if err := cliexchange.NodeCreate(org, "", nodeId, nodeToken, userPw, anaxArch, nodeName, nodeType, false, exchangeHandler); err != nil {
+				return err
+			}
 		} else {
 			// node exists but the token is new, update the node token
 			msgPrinter.Printf("Updating node token...")
 			msgPrinter.Println()
 			patchNodeReq := cliexchange.NodeExchangePatchToken{Token: nodeToken}
-			cliutils.ExchangePutPost("Exchange", http.MethodPatch, cliutils.GetExchangeUrl(), "orgs/"+org+"/nodes/"+nodeId, cliutils.OrgAndCreds(userOrg, userAuth), []int{201}, patchNodeReq, nil)
+			if _, err := exchangeHandler.Patch("orgs/"+org+"/nodes/"+nodeId, cliutils.OrgAndCreds(userOrg, userAuth), patchNodeReq, nil); err != nil {
+				return err
+			}
 			for nId, n := range devicesResp.Devices {
 				exchangePattern = n.Pattern
 
 				// check if the node type matches. The node type from the exchange will never be empty, the exchange returns 'device' if empty.
 				if nodeType != n.GetNodeType() {
-					cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Node type mismatch. The node type '%v' does not match the node type '%v' of the Exchange node %v.", nodeType, n.GetNodeType(), nId))
+					return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Node type mismatch. The node type '%v' does not match the node type '%v' of the Exchange node %v.", nodeType, n.GetNodeType(), nId))
 				}
 				existingNodeName = n.Name
 				break
@@ -239,7 +267,7 @@ func DoIt(org, pattern, nodeIdTok, userPw, inputFile string, nodeOrgFromFlag str
 
 			// check if the node type matches. The node type from the exchange will never be empty, the exchange returns 'device' if empty.
 			if nodeType != n.GetNodeType() {
-				cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Node type mismatch. The node type '%v' does not match the node type '%v' of the Exchange node %v.", nodeType, n.GetNodeType(), nId))
+				return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Node type mismatch. The node type '%v' does not match the node type '%v' of the Exchange node %v.", nodeType, n.GetNodeType(), nId))
 			}
 			existingNodeName = n.Name
 			break
@@ -250,7 +278,7 @@ func DoIt(org, pattern, nodeIdTok, userPw, inputFile string, nodeOrgFromFlag str
 		msgPrinter.Printf("Updating node name...")
 		msgPrinter.Println()
 		patchNodeReq := cliexchange.NodeExchangePatchName{Name: nodeName}
-		cliutils.ExchangePutPost("Exchange", http.MethodPatch, cliutils.GetExchangeUrl(), "orgs/"+org+"/nodes/"+nodeId, cliutils.OrgAndCreds(org, nodeIdTok), []int{200, 201}, patchNodeReq, nil)
+		exchangeHandler.Patch("orgs/"+org+"/nodes/"+nodeId, cliutils.OrgAndCreds(org, nodeIdTok), patchNodeReq, nil)
 	}
 
 	checkPattern := false
@@ -271,8 +299,16 @@ func DoIt(org, pattern, nodeIdTok, userPw, inputFile string, nodeOrgFromFlag str
 			checkPattern = true
 		}
 	} else {
-		if exchangePattern != "" && cliutils.AddOrg(org, pattern) != cliutils.AddOrg(org, exchangePattern) {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Cannot proceed with the given pattern %s because it is different from the pattern %s defined for the node in the Exchange.\nTo correct the problem, please do one of the following: \n\t- Remove the node from the Exchange \n\t- Remove the pattern from the node in the Exchange \n\t- Register without a pattern (the pattern defined on the node in the Exchange will be used)", pattern, exchangePattern))
+		patternOrg, err := cliutils.AddOrg(org, pattern)
+		if err != nil {
+			return err
+		}
+		excahngePatternOrg, err :=  cliutils.AddOrg(org, exchangePattern)
+		if err != nil {
+			return err
+		}
+		if exchangePattern != "" && patternOrg != excahngePatternOrg {
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Cannot proceed with the given pattern %s because it is different from the pattern %s defined for the node in the Exchange.\nTo correct the problem, please do one of the following: \n\t- Remove the node from the Exchange \n\t- Remove the pattern from the node in the Exchange \n\t- Register without a pattern (the pattern defined on the node in the Exchange will be used)", pattern, exchangePattern))
 		} else {
 			checkPattern = true
 		}
@@ -282,14 +318,17 @@ func DoIt(org, pattern, nodeIdTok, userPw, inputFile string, nodeOrgFromFlag str
 	if checkPattern {
 		var output exchange.GetPatternResponse
 		var patorg, patname string
-		patorg, patname = cliutils.TrimOrg(org, pattern)
-		httpCode := cliutils.ExchangeGet("Exchange", exchUrlBase, "orgs/"+patorg+"/patterns"+cliutils.AddSlash(patname), cliutils.OrgAndCreds(org, nodeIdTok), []int{200, 404, 405}, &output)
-		if httpCode != 200 {
-			cliutils.Fatal(cliutils.NOT_FOUND, msgPrinter.Sprintf("pattern '%s/%s' not found from the Exchange.", patorg, patname))
+		if patorg, patname, err = cliutils.TrimOrg(org, pattern); err != nil {
+			return err
+		}
+		if httpCode, err := exchangeHandler.Get("orgs/"+patorg+"/patterns"+cliutils.AddSlash(patname), cliutils.OrgAndCreds(org, nodeIdTok), &output); err != nil {
+			return err
+		} else if httpCode != 200 {
+			return cliutils.CLIError{StatusCode: cliutils.NOT_FOUND, msgPrinter.Sprintf("pattern '%s/%s' not found from the Exchange.", patorg, patname))
 		}
 		pat = output.Patterns[patorg+"/"+patname]
 		if len(pat.Services) == 0 {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Cannot proceed with the given pattern %s because it does not include any services.", pattern))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Cannot proceed with the given pattern %s because it does not include any services.", pattern))
 		} else {
 			msgPrinter.Printf("Will proceeed with the given pattern %s.", pattern)
 			msgPrinter.Println()
@@ -301,7 +340,9 @@ func DoIt(org, pattern, nodeIdTok, userPw, inputFile string, nodeOrgFromFlag str
 		msgPrinter.Printf("Updating the node policy...")
 		msgPrinter.Println()
 		exchNodePol := exchange.ExchangeNodePolicy{NodePolicy: nodePol, NodePolicyVersion: exchangecommon.NODEPOLICY_VERSION_VERSION_2}
-		cliutils.ExchangePutPost("Exchange", http.MethodPut, cliutils.GetExchangeUrl(), "orgs/"+org+"/nodes/"+nodeId+"/policy", cliutils.OrgAndCreds(org, nodeIdTok), []int{201}, exchNodePol, nil)
+		if _, err := exchangeHandler.Put("orgs/"+org+"/nodes/"+nodeId+"/policy", cliutils.OrgAndCreds(org, nodeIdTok), exchNodePol, nil); err != nil {
+			return err
+		}
 	}
 
 	// Initialize the Horizon device (node)
@@ -311,7 +352,7 @@ func DoIt(org, pattern, nodeIdTok, userPw, inputFile string, nodeOrgFromFlag str
 	falseVal := false
 	nd := api.HorizonDevice{Id: &nodeId, Token: &nodeToken, Org: &org, Pattern: &pattern, Name: &nodeName, NodeType: &nodeType, HA: &falseVal} //todo: support HA config
 
-	err := CreateNode(nd, timeout)
+	err = CreateNode(nd, timeout)
 	if err != nil {
 		msgPrinter.Printf("Error initializing the node: %v", err)
 		msgPrinter.Println()
@@ -391,15 +432,18 @@ func DoIt(org, pattern, nodeIdTok, userPw, inputFile string, nodeOrgFromFlag str
 			// Wait for the service to be started.
 			var userOrg, userAuth string
 			if userPw != "" {
-				userOrg, userAuth = cliutils.TrimOrg(org, userPw)
+				if userOrg, userAuth, err = cliutils.TrimOrg(org, userPw); err != nil {
+					return err
+				}
 			}
-			WaitForService(waitOrg, waitService, waitTimeout, pattern, pat, nodeType, anaxArch, org, nodeIdTok, userOrg, userAuth)
+			WaitForService(waitOrg, waitService, waitTimeout, pattern, pat, nodeType, anaxArch, org, nodeIdTok, userOrg, userAuth, exchangeHandler)
 		}
 	} else {
 		msgPrinter.Printf("Horizon node is registered. Workload agreement negotiation should begin shortly. Run 'hzn agreement list' to view.")
 		msgPrinter.Println()
 	}
 
+	return nil
 }
 
 // RegistrationFailure attempts to unregister the node if a critical error is encountered during registration.
@@ -427,12 +471,12 @@ func RegistrationFailure() {
 			unregister.DeleteHorizonNode(false, true, 15)
 			err = unregister.CheckNodeConfigState(15)
 			if err != nil {
-				cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Failed to deep clean the node. %v", err))
+				return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("Failed to deep clean the node. %v", err))
 			}
 		}
 	}
 
-	cliutils.Fatal(cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("Registration failed. Node successfully returned to unregistered state."))
+	return cliutils.CLIError{StatusCode: cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("Registration failed. Node successfully returned to unregistered state."))
 }
 
 // CreateNode will create the node locally during registration.
@@ -460,7 +504,7 @@ func CreateNode(nodeDevice api.HorizonDevice, timeout int) error {
 		case httpReturn := <-c:
 			if httpCode, err := strconv.Atoi(httpReturn); err == nil {
 				if httpCode == cliutils.ANAX_ALREADY_CONFIGURED {
-					cliutils.Fatal(cliutils.HTTP_ERROR, msgPrinter.Sprintf("this Horizon node is already registered or in the process of being registered. If you want to register it differently, run 'hzn unregister' first."))
+					return cliutils.CLIError{StatusCode: cliutils.HTTP_ERROR, msgPrinter.Sprintf("this Horizon node is already registered or in the process of being registered. If you want to register it differently, run 'hzn unregister' first."))
 				} else if httpCode != 200 && httpCode != 201 {
 					return fmt.Errorf("Bad HTTP code %d returned from node.", httpCode)
 				} else {
@@ -577,7 +621,7 @@ func verifyRegisterParamters(org, pattern, nodeOrgFromFlag, patternFromFlag, wai
 
 	if nodeOrgFromFlag != "" || patternFromFlag != "" {
 		if org != "" || pattern != "" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("-o and -p are mutually exclusive with <nodeorg> and <pattern> arguments."))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("-o and -p are mutually exclusive with <nodeorg> and <pattern> arguments."))
 		} else {
 			org = nodeOrgFromFlag
 			pattern = patternFromFlag
@@ -590,11 +634,11 @@ func verifyRegisterParamters(org, pattern, nodeOrgFromFlag, patternFromFlag, wai
 	}
 
 	if org == "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Please specify the node organization id."))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("Please specify the node organization id."))
 	}
 
 	if waitService == "" && waitOrg != "" {
-		cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("-s must be specified if --serviceorg is specified"))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("-s must be specified if --serviceorg is specified"))
 	}
 
 	// if waitOrg is omitted, default to '*'
@@ -605,9 +649,9 @@ func verifyRegisterParamters(org, pattern, nodeOrgFromFlag, patternFromFlag, wai
 	// for the policy case, waitService = '*' is not supported
 	if waitService == "*" {
 		if pattern == "" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("When registering with a node policy, '*' is not a valid value for -s."))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("When registering with a node policy, '*' is not a valid value for -s."))
 		} else if waitOrg != "*" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("When registering with a pattern, if -s is '*' (i.e. all the top-level services in the pattern will be monitored), --serviceorg must be omitted."))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("When registering with a pattern, if -s is '*' (i.e. all the top-level services in the pattern will be monitored), --serviceorg must be omitted."))
 		}
 	}
 
@@ -617,7 +661,7 @@ func verifyRegisterParamters(org, pattern, nodeOrgFromFlag, patternFromFlag, wai
 		horDevice := api.HorizonDevice{}
 		cliutils.HorizonGet("node", []int{200}, &horDevice, false)
 		if horDevice.Id == nil {
-			cliutils.Fatal(cliutils.ANAX_NOT_CONFIGURED_YET, msgPrinter.Sprintf("Failed to get proper response from the Horizon agent"))
+			return cliutils.CLIError{StatusCode: cliutils.ANAX_NOT_CONFIGURED_YET, msgPrinter.Sprintf("Failed to get proper response from the Horizon agent"))
 		}
 		nodeId = *horDevice.Id
 	}
@@ -625,11 +669,11 @@ func verifyRegisterParamters(org, pattern, nodeOrgFromFlag, patternFromFlag, wai
 	if nodeId != "" {
 		illegalInput, err := api.InputIsIllegal(nodeId)
 		if err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("could not validate node ID '%s': %v", nodeId, err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("could not validate node ID '%s': %v", nodeId, err))
 		} else if illegalInput != "" {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("invalid node ID: A-Za-z0-9, unicode characters and special symbols !-*+()?.,:&@ are only allowed"))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("invalid node ID: A-Za-z0-9, unicode characters and special symbols !-*+()?.,:&@ are only allowed"))
 		} else if strings.Contains(nodeId, " ") {
-			cliutils.Fatal(cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("invalid node ID: Whitespace is not permitted"))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_INPUT_ERROR, msgPrinter.Sprintf("invalid node ID: Whitespace is not permitted"))
 		}
 	}
 
@@ -644,10 +688,10 @@ func isWithinRanges(version string, versionRanges []string) bool {
 	for _, vr := range versionRanges {
 		vRange, err := semanticversion.Version_Expression_Factory(vr)
 		if err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("invalid version range '%s': %v", vr, err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("invalid version range '%s': %v", vr, err))
 		}
 		if inRange, err := vRange.Is_within_range(version); err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("unable to verify that %v is within %v, error %v", version, vRange, err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("unable to verify that %v is within %v, error %v", version, vRange, err))
 		} else if inRange {
 			return true
 		}
@@ -656,16 +700,18 @@ func isWithinRanges(version string, versionRanges []string) bool {
 }
 
 // GetHighestService queries the exchange for all versions of this service and returns the highest version that is within at least 1 of the version ranges
-func GetHighestService(nodeCreds, org, url, arch string, versionRanges []string) exchange.ServiceDefinition {
+func GetHighestService(nodeCreds, org, url, arch string, versionRanges []string, exchangeHandler cliutils.ServiceHandler) (exchange.ServiceDefinition, error) {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	route := "orgs/" + org + "/services?url=" + url + "&arch=" + arch // get all services of this org, url, and arch
 	var svcOutput exchange.GetServicesResponse
 	cliutils.SetWhetherUsingApiKey(nodeCreds)
-	cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), route, nodeCreds, []int{200}, &svcOutput)
+	if _, err := exchangeHandler.Get(route, nodeCreds, &svcOutput); err != nil {
+		return exchange.ServiceDefinition{}, err
+	}
 	if len(svcOutput.Services) == 0 {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("found no services in the Exchange matching: org=%s, url=%s, arch=%s", org, url, arch))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("found no services in the Exchange matching: org=%s, url=%s, arch=%s", org, url, arch))
 	}
 
 	// Loop thru the returned services and pick out the highest version that is within one of the versionRanges
@@ -681,16 +727,16 @@ func GetHighestService(nodeCreds, org, url, arch string, versionRanges []string)
 		// else see if this version is higher than the previous highest version
 		c, err := semanticversion.CompareVersions(svcOutput.Services[highestKey].Version, svc.Version)
 		if err != nil {
-			cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("error comparing version %v with version %v. %v", svcOutput.Services[highestKey], svc.Version, err))
+			return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("error comparing version %v with version %v. %v", svcOutput.Services[highestKey], svc.Version, err))
 		} else if c == -1 {
 			highestKey = svcKey
 		}
 	}
 
 	if highestKey == "" {
-		cliutils.Fatal(cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("found no services in the Exchange matched: org=%s, specRef=%s, version range=%s, arch=%s", org, url, versionRanges, arch))
+		return cliutils.CLIError{StatusCode: cliutils.CLI_GENERAL_ERROR, msgPrinter.Sprintf("found no services in the Exchange matched: org=%s, specRef=%s, version range=%s, arch=%s", org, url, versionRanges, arch))
 	}
-	return svcOutput.Services[highestKey]
+	return svcOutput.Services[highestKey], nil
 }
 
 func formSvcKey(org, url, arch string) string {
@@ -708,18 +754,26 @@ type SvcMapValue struct {
 }
 
 // AddAllRequiredSvcs
-func AddAllRequiredSvcs(nodeCreds, org, url, arch, versionRange string, allRequiredSvcs map[string]*SvcMapValue) {
+func AddAllRequiredSvcs(nodeCreds, org, url, arch, versionRange string, allRequiredSvcs map[string]*SvcMapValue, exchangeHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	// Get the service from the exchange so we can get its required services
-	highestSvc := GetHighestService(nodeCreds, org, url, arch, []string{versionRange})
+	highestSvc, err := GetHighestService(nodeCreds, org, url, arch, []string{versionRange}, exchangeHandler)
+	if err != nil {
+		return err
+	}
 
-	nodeOrg, nodeIdTok := cliutils.TrimOrg(org, nodeCreds)
+	nodeOrg, nodeIdTok, err := cliutils.TrimOrg(org, nodeCreds)
+	if err != nil {
+		return err
+	}
 	nodeId, _ := cliutils.SplitIdToken(nodeIdTok)
 
 	var nodes exchange.GetDevicesResponse
-	cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), "orgs/"+nodeOrg+"/nodes/"+nodeId, nodeCreds, []int{200}, &nodes)
+	if _, err := exchangeHandler.Get("orgs/"+nodeOrg+"/nodes/"+nodeId, nodeCreds, &nodes); err != nil {
+		return err
+	}
 
 	// Make sure that the node type and the service type match
 	serviceType := highestSvc.GetServiceType()
@@ -727,7 +781,7 @@ func AddAllRequiredSvcs(nodeCreds, org, url, arch, versionRange string, allRequi
 		if serviceType != exchangecommon.SERVICE_TYPE_BOTH && n.GetNodeType() != serviceType {
 			msgPrinter.Printf("Ignoring version %s of service %s/%s with node type mismatch: the service type '%v' does not match the node type '%v' of the Exchange node %v.", versionRange, org, url, serviceType, n.GetNodeType(), nId)
 			msgPrinter.Println()
-			return
+			return nil
 		}
 	}
 
@@ -738,7 +792,7 @@ func AddAllRequiredSvcs(nodeCreds, org, url, arch, versionRange string, allRequi
 		// To protect against circular service references, check if we've already seen this exact svc version range
 		for _, v := range s.VersionRanges {
 			if v == versionRange {
-				return
+				return nil
 			}
 		}
 	} else {
@@ -750,7 +804,7 @@ func AddAllRequiredSvcs(nodeCreds, org, url, arch, versionRange string, allRequi
 
 	// check if the service contains privileged
 	if priv, err := compcheck.DeploymentRequiresPrivilege(highestSvc.Deployment, msgPrinter); err != nil {
-		cliutils.Fatal(cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("Failed to check if deployment requires privileged: %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("Failed to check if deployment requires privileged: %v", err))
 	} else if priv {
 		allRequiredSvcs[svcKey].Privileged = true
 	}
@@ -758,25 +812,34 @@ func AddAllRequiredSvcs(nodeCreds, org, url, arch, versionRange string, allRequi
 	// Loop thru this service's required services, adding them to our map
 	for _, s := range highestSvc.RequiredServices {
 		// This will add this svc to our map and keep descending down the required services
-		AddAllRequiredSvcs(nodeCreds, s.Org, s.URL, s.Arch, s.VersionRange, allRequiredSvcs)
+		if err := AddAllRequiredSvcs(nodeCreds, s.Org, s.URL, s.Arch, s.VersionRange, allRequiredSvcs, exchangeHandler); err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 // CreateInputFile runs thru the services used by this pattern (descending into all required services) and collects the user input needed
-func CreateInputFile(nodeOrg, pattern, arch, nodeIdTok, inputFile string) {
+func CreateInputFile(nodeOrg, pattern, arch, nodeIdTok, inputFile string, exchangeHandler cliutils.ServiceHandler) error {
 	// get message printer
 	msgPrinter := i18n.GetMessagePrinter()
 
 	var patOrg string
-	patOrg, pattern = cliutils.TrimOrg(nodeOrg, pattern) // patOrg will either get the prefix from pattern, or default to nodeOrg
+	var err error
+	if patOrg, pattern, err = cliutils.TrimOrg(nodeOrg, pattern); err != nil { // patOrg will either get the prefix from pattern, or default to nodeOrg
+		return err
+	}
 	nodeCreds := cliutils.OrgAndCreds(nodeOrg, nodeIdTok)
 
 	// Get the pattern
 	var patOutput exchange.GetPatternResponse
-	cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), "orgs/"+patOrg+"/patterns/"+pattern, nodeCreds, []int{200}, &patOutput)
+	if _, err := exchangeHandler.Get("orgs/"+patOrg+"/patterns/"+pattern, nodeCreds, &patOutput); err != nil {
+		return err
+	}
 	patKey := cliutils.OrgAndCreds(patOrg, pattern)
 	if _, ok := patOutput.Patterns[patKey]; !ok {
-		cliutils.Fatal(cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("did not find pattern '%s' as expected", patKey))
+		return cliutils.CLIError{StatusCode: cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("did not find pattern '%s' as expected", patKey))
 	}
 	if arch == "" {
 		arch = cutil.ArchString()
@@ -794,7 +857,9 @@ func CreateInputFile(nodeOrg, pattern, arch, nodeIdTok, inputFile string) {
 
 		for _, svcVersion := range svc.ServiceVersions {
 			// This will add this svc to our map and keep descending down the required services
-			AddAllRequiredSvcs(nodeCreds, svc.ServiceOrg, svc.ServiceURL, svc.ServiceArch, svcVersion.Version, allRequiredSvcs) // svcVersion.Version is a version range
+			if err := AddAllRequiredSvcs(nodeCreds, svc.ServiceOrg, svc.ServiceURL, svc.ServiceArch, svcVersion.Version, allRequiredSvcs, exchangeHandler); err != nil { // svcVersion.Version is a version range
+				return err
+			}
 		}
 	}
 
@@ -809,7 +874,10 @@ func CreateInputFile(nodeOrg, pattern, arch, nodeIdTok, inputFile string) {
 			// When we were finding the required services we only encountered this service once, so the user input we found then is valid
 			userInput = s.UserInputs
 		} else {
-			svc := GetHighestService(nodeCreds, s.Org, s.URL, s.Arch, s.VersionRanges)
+			svc, err := GetHighestService(nodeCreds, s.Org, s.URL, s.Arch, s.VersionRanges, exchangeHandler)
+			if err != nil {
+				return err
+			}
 			userInput = svc.UserInputs
 		}
 
@@ -830,11 +898,11 @@ func CreateInputFile(nodeOrg, pattern, arch, nodeIdTok, inputFile string) {
 	// Output the file
 	jsonBytes, err := json.MarshalIndent(svcInputs, "", cliutils.JSON_INDENT)
 	if err != nil {
-		cliutils.Fatal(cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("failed to marshal the user input template file: %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("failed to marshal the user input template file: %v", err))
 	}
 
 	if err := ioutil.WriteFile(inputFile, jsonBytes, 0644); err != nil {
-		cliutils.Fatal(cliutils.FILE_IO_ERROR, msgPrinter.Sprintf("problem writing the user input template file: %v", err))
+		return cliutils.CLIError{StatusCode: cliutils.FILE_IO_ERROR, msgPrinter.Sprintf("problem writing the user input template file: %v", err))
 	}
 
 	msgPrinter.Printf("Wrote %s", inputFile)
@@ -854,15 +922,16 @@ func CreateInputFile(nodeOrg, pattern, arch, nodeIdTok, inputFile string) {
 		// Output the file
 		jsonBytes, err := json.MarshalIndent(allowPrivilegedPolicyExample, "", cliutils.JSON_INDENT)
 		if err != nil {
-			cliutils.Fatal(cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("failed to marshal the example node policy file: %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.INTERNAL_ERROR, msgPrinter.Sprintf("failed to marshal the example node policy file: %v", err))
 		}
 		if err := ioutil.WriteFile(nodePolicySampleFile, jsonBytes, 0644); err != nil {
-			cliutils.Fatal(cliutils.FILE_IO_ERROR, msgPrinter.Sprintf("problem writing the example node policy file: %v", err))
+			return cliutils.CLIError{StatusCode: cliutils.FILE_IO_ERROR, msgPrinter.Sprintf("problem writing the example node policy file: %v", err))
 		} else {
 			msgPrinter.Printf("One or more of services contain privileged in the deployment string. Make sure your node policy file allows privileged. A sample node policy file has been created: %s", nodePolicySampleFile)
 			msgPrinter.Println()
 		}
 	}
+	return nil
 }
 
 // this function parses the error returned by the registration process to see if the error

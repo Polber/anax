@@ -5,8 +5,11 @@ import (
 	"github.com/open-horizon/anax/cli/cliutils"
 )
 
-func Status(org, userPw string) {
+func Status(org, userPw string, exchangeHandler cliutils.ServiceHandler) error {
 	var output string
-	cliutils.ExchangeGet("Exchange", cliutils.GetExchangeUrl(), "admin/status", cliutils.OrgAndCreds(org, userPw), []int{200}, &output)
+	if _, err := exchangeHandler.Get("admin/status", cliutils.OrgAndCreds(org, userPw), &output); err != nil {
+		return err
+	}
 	fmt.Println(output)
+	return nil
 }
