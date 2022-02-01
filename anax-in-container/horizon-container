@@ -61,13 +61,9 @@ canonicalPath() {
 }
 
 # Bash cant do AND of cmd and checking a string (afaik), so bury it in this function
-isMacAndDefaultIndex() {
-	if isMacos; then
-		if [[ "$INDEX_NUM" == "1" ]]; then
-			return 0
-		else
-			return 1
-		fi
+isDefaultIndex() {
+	if [[ "$INDEX_NUM" == "1" ]]; then
+		return 0
 	else
 		return 1
 	fi
@@ -291,7 +287,7 @@ start() {
 	if [[ "$2" == "updating" ]]; then
 		echo "Horizon agent updated/restarted successfully."
 	else
-		if isMacAndDefaultIndex; then
+		if isDefaultIndex; then
 			# hzn on mac sets HORIZON_URL correctly by default for index 1, so the user does not need to do it
 			echo "Horizon agent started successfully. Now use 'hzn node list', 'hzn register ...', and 'hzn agreement list'"
 		else
