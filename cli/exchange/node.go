@@ -712,6 +712,10 @@ func NodeManagementList(org, credToUse, nodeName string, all bool) {
 	msgPrinter.Println()
 }
 
+func NodeManagementStatus(org, credToUse, nodeName, nmpName string) {
+
+}
+
 // Verify the node user input for the pattern case. Make sure that the given
 // user input are compatible with the pattern.
 func verifyNodeUserInput(org string, credToUse string, node exchange.Device, nId string, ui []policy.UserInput) {
