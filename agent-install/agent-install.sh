@@ -78,7 +78,7 @@ Required Input Variables (via flag, environment, or config file):
     HZN_EXCHANGE_URL, HZN_FSS_CSSURL, HZN_ORG_ID, either HZN_EXCHANGE_USER_AUTH or HZN_EXCHANGE_NODE_AUTH
 
 Options/Flags:
-    -c                  Path to a certificate file. Default: ./$AGENT_CERT_FILE_DEFAULT, if present. If the argument begins with 'css:' (e.g. css:$CSS_OBJ_PATH_DEFAULT), it will download the config file from the MMS. If only 'css:' is specified, the default path $CSS_OBJ_PATH_DEFAULT will be added. (This flag is equivalent to AGENT_CERT_FILE or HZN_MGMT_HUB_CERT_PATH)
+    -c                  Path to a certificate file. Default: ./$AGENT_CERT_FILE_DEFAULT, if present. If the argument begins with 'css:' (e.g. css:$CSS_OBJ_PATH_DEFAULT), it will download the certificate file from the MMS. If only 'css:' is specified, the default path $CSS_OBJ_PATH_DEFAULT will be added. (This flag is equivalent to AGENT_CERT_FILE or HZN_MGMT_HUB_CERT_PATH)
     -k                  Path to a configuration file. Default: ./$AGENT_CFG_FILE_DEFAULT, if present. If the argument begins with 'css:' (e.g. css:$CSS_OBJ_PATH_DEFAULT), it will download the config file from the MMS. If only 'css:' is specified, the default path $CSS_OBJ_PATH_DEFAULT will be added. All other variables for this script can be specified in the config file, except for INPUT_FILE_PATH (and HZN_ORG_ID if -i css: is specified). (This flag is equivalent to AGENT_CFG_FILE)
     -i                  Installation packages/files location (default: current directory). If the argument is the URL of an anax git repo release (e.g. https://github.com/open-horizon/anax/releases/download/v1.2.3) it will download the appropriate packages/files from there. If it is anax: or https://github.com/open-horizon/anax/releases , it will default to the latest release. Otherwise, if the argument begins with 'http' or 'https', it will be used as an APT repository (for debian hosts). If the argument begins with 'css:' (e.g. css:$CSS_OBJ_PATH_DEFAULT), it will download the appropriate files/packages from the MMS. If only 'css:' is specified, the default path $CSS_OBJ_PATH_DEFAULT will be added. (This flag is equivalent to INPUT_FILE_PATH)
     -z                  The name of your agent installation tar file. Default: ./agent-install-files.tar.gz (This flag is equivalent to AGENT_INSTALL_ZIP)
@@ -2903,8 +2903,12 @@ function create_cluster_resources() {
 function update_cluster_resources() {
     log_debug "update_cluster_resources() begin"
 
-    update_secret
-    update_configmap
+    if has_upgrade_type_cert; then
+        update_secret
+    fi
+    if has_upgrade_type_cfg; then
+        update_configmap
+    fi
 
     log_debug "update_cluster_resources() end"
 
@@ -3237,10 +3241,12 @@ function install_update_cluster() {
 
     check_existing_exch_node_is_correct_type "cluster"
 
-    loadClusterAgentImage   # create the cluster agent docker image locally
+    if has_upgrade_type_sw; then
+        loadClusterAgentImage   # create the cluster agent docker image locally
+    fi
 
     # push agent image to cluster's registry
-    if [[ "$USE_EDGE_CLUSTER_REGISTRY" == "true" ]]; then
+    if [[ "$USE_EDGE_CLUSTER_REGISTRY" == "true" && has_upgrade_type_sw ]]; then
         pushImageToEdgeClusterRegistry
     fi
 
@@ -3248,6 +3254,8 @@ function install_update_cluster() {
     if [[ "$AGENT_DEPLOYMENT_UPDATE" == "true" ]]; then
         log_info "Update agent on edge cluster"
         update_cluster
+    elif [[ ! has_upgrade_type_sw || ! has_upgrade_type_cert || ! has_upgrade_type_cfg  ]]; then
+        log_fatal 1 "A fresh install is required, but the -G flag or AGENT_UPGRADE_TYPES variable was set to '$AGENT_UPGRADE_TYPES'. Set value to 'software,cert,config' or unset before running this script again."
     else
         log_info "Install agent on edge cluster"
         install_cluster
@@ -3315,7 +3323,10 @@ function update_cluster() {
     done
     #lily: shouldn't we handle the case where GET_RESOURCE_MAX_TRY reached 0 but the resources still weren't ready?
 
-    update_deployment
+    if has_upgrade_type_sw; then
+        update_deployment
+    fi
+
     check_deployment_status
     if ! is_small_kube; then
         # setup image registry cert. This will patch the running deployment
