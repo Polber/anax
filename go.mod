@@ -6,7 +6,7 @@ require (
 	github.com/adams-sarah/test2doc v0.0.0-20210514182215-2580a24111e5
 	github.com/alecthomas/participle v0.7.1
 	github.com/boltdb/bolt v1.3.1
-	github.com/containerd/containerd v1.5.7 // indirect
+	github.com/containerd/containerd v1.5.10 // indirect
 	github.com/coreos/go-iptables v0.6.0
 	github.com/eclipse/paho.mqtt.golang v1.3.5 // indirect
 	github.com/fsouza/go-dockerclient v1.7.4
@@ -22,10 +22,9 @@ require (
 	github.com/satori/go.uuid v1.2.0
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
-	golang.org/x/mod v0.5.1 // indirect
+	golang.org/x/net v0.0.0-20211015210444-4f30a5c0130f // indirect
 	golang.org/x/sys v0.0.0-20211205182925-97ca703d548d
 	golang.org/x/text v0.3.7
-	golang.org/x/tools v0.1.8 // indirect
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.22.2
@@ -33,4 +32,3 @@ require (
 	k8s.io/apimachinery v0.22.2
 	k8s.io/client-go v0.22.2
 )
-
