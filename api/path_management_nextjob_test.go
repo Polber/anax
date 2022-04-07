@@ -89,7 +89,7 @@ func Test_FindManagementNextJobForOutput(t *testing.T) {
 	}
 
 	// test #6 - Search for any status type
-	if errHandled, statuses := FindManagementNextJobForOutput("", "", errorHandler, db); errHandled {
+	if errHandled, statuses := FindManagementNextJobForOutput("agentUpgrade", "", errorHandler, db); errHandled {
 		t.Errorf("failed to find node management status in db, error %v", err)
 	} else if statuses != nil && len(statuses) != 1 {
 		t.Errorf("incorrect number of management statuses returned from db, expected: %v, actual: %v", 1, len(statuses))
